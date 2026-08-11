@@ -14,7 +14,7 @@ export function Step2FPS() {
   const { state, t, isRTL, setFPS } = useApp();
   const maxFPS = state.selectedDevice?.specs.maxFPS || 60;
   const currentFPS = state.playerSettings.preferredFPS;
-  
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -22,7 +22,7 @@ export function Step2FPS() {
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{t.step2Title}</h2>
         <p className="text-gray-400">{t.step2Subtitle}</p>
       </div>
-      
+
       {/* Device info */}
       {state.selectedDevice && (
         <div className="flex items-center justify-center gap-2 text-sm">
@@ -32,13 +32,13 @@ export function Step2FPS() {
           <span className="text-amber-400 font-bold">{maxFPS} FPS</span>
         </div>
       )}
-      
+
       {/* FPS options */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {fpsOptions.map(option => {
           const isDisabled = option.value > maxFPS;
           const isSelected = option.value === currentFPS;
-          
+
           return (
             <button
               key={option.value}
@@ -58,7 +58,7 @@ export function Step2FPS() {
               )}>
                 {option.value}
               </div>
-              
+
               {/* Label */}
               <div className={cn(
                 'text-sm font-medium',
@@ -66,14 +66,14 @@ export function Step2FPS() {
               )}>
                 {isRTL ? option.labelAr : option.label}
               </div>
-              
+
               {/* Selected indicator */}
               {isSelected && (
                 <div className="absolute top-2 left-2">
                   <Zap className="w-4 h-4 text-amber-400" />
                 </div>
               )}
-              
+
               {/* Disabled indicator */}
               {isDisabled && (
                 <div className="absolute top-2 left-2">
@@ -84,14 +84,14 @@ export function Step2FPS() {
           );
         })}
       </div>
-      
+
       {/* Tip */}
       <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
         <p className="text-sm text-blue-400">
           {t.fpsTip}
         </p>
       </div>
-      
+
       {/* Current selection summary */}
       <div className="text-center">
         <p className="text-gray-400 text-sm">

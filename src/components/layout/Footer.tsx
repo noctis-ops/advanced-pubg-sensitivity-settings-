@@ -2,7 +2,7 @@ import { useApp } from '../../context/AppContext';
 
 export function Footer() {
   const { t } = useApp();
-  
+
   return (
     <footer className="py-6 px-4 mt-8 border-t border-white/5">
       <div className="max-w-2xl mx-auto text-center">

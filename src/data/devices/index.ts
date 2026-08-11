@@ -1,20 +1,29 @@
 import { Device, DeviceBrand } from '../../types';
+import { enrichDevicesWithProcessors } from './processor-metadata';
 import { iPhones } from './iphones';
 import { iPads } from './ipads';
 import { samsungDevices } from './samsung';
 import { xiaomiDevices } from './xiaomi';
 import { oneplusDevices } from './oneplus';
 import { gamingDevices } from './gaming';
+import { oppoDevices, realmeDevices } from './oppo';
+import { huaweiDevices, honorDevices } from './huawei';
 
-// Combine all devices
-export const allDevices: Device[] = [
+// Combine and enrich all devices with processor/GPU metadata.
+const rawDevices: Device[] = [
   ...iPhones,
   ...iPads,
   ...samsungDevices,
   ...xiaomiDevices,
   ...oneplusDevices,
   ...gamingDevices,
+  ...oppoDevices,
+  ...realmeDevices,
+  ...huaweiDevices,
+  ...honorDevices,
 ];
+
+export const allDevices: Device[] = enrichDevicesWithProcessors(rawDevices);
 
 // Get popular devices (top 10)
 export const popularDevices: Device[] = allDevices
@@ -31,8 +40,8 @@ export function getDevicesByBrand(brand: DeviceBrand): Device[] {
 export function searchDevices(query: string): Device[] {
   const lowerQuery = query.toLowerCase().trim();
   if (!lowerQuery) return [];
-  
-  return allDevices.filter(device => 
+
+  return allDevices.filter(device =>
     device.name.toLowerCase().includes(lowerQuery) ||
     device.nameAr.includes(lowerQuery) ||
     device.brand.toLowerCase().includes(lowerQuery)
@@ -68,4 +77,19 @@ export const brandInfo: Record<DeviceBrand, { name: string; nameAr: string; emoj
 };
 
 // Available brands (that have devices)
-export const availableBrands: DeviceBrand[] = ['apple', 'samsung', 'xiaomi', 'redmi', 'poco', 'oneplus', 'rog', 'redmagic', 'iqoo'];
+export const availableBrands: DeviceBrand[] = [
+  'apple',
+  'samsung',
+  'xiaomi',
+  'redmi',
+  'poco',
+  'oneplus',
+  'oppo',
+  'realme',
+  'huawei',
+  'honor',
+  'rog',
+  'redmagic',
+  'blackshark',
+  'iqoo'
+];

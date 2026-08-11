@@ -283,19 +283,19 @@ pubg-sensitivity-generator/
 ```typescript
 // src/types/device.ts
 
-export type DeviceBrand = 
-  | 'apple' 
-  | 'samsung' 
-  | 'xiaomi' 
-  | 'oneplus' 
-  | 'oppo' 
+export type DeviceBrand =
+  | 'apple'
+  | 'samsung'
+  | 'xiaomi'
+  | 'oneplus'
+  | 'oppo'
   | 'realme'
-  | 'huawei' 
+  | 'huawei'
   | 'honor'
-  | 'poco' 
+  | 'poco'
   | 'redmi'
-  | 'rog' 
-  | 'redmagic' 
+  | 'rog'
+  | 'redmagic'
   | 'blackshark'
   | 'sony'
   | 'google'
@@ -307,6 +307,17 @@ export type DeviceType = 'phone' | 'tablet';
 
 export type DeviceOS = 'ios' | 'android';
 
+export interface ProcessorMetadata {
+  model: string;             // مثال: Apple A17 Pro
+  gpuModel: string;
+  vendor: 'Apple' | 'Qualcomm' | 'MediaTek' | 'Samsung' | 'Huawei' | 'Google' | 'Unisoc' | 'Other';
+  processNodeNm: number | null;
+  sustainedFPS: number;
+  thermalProfile: 'cool' | 'balanced' | 'warm' | 'hot';
+  dataConfidence: 'measured' | 'spec-sheet' | 'community' | 'modelled';
+  source: 'spec-sheet' | 'community' | 'modelled';
+}
+
 export interface DeviceSpecs {
   screenSize: number;          // بالإنش (مثال: 6.7)
   screenWidth: number;         // بالبكسل
@@ -317,6 +328,7 @@ export interface DeviceSpecs {
   maxFPS: number;              // أقصى فريمات مدعومة في PUBG
   gyroscopeQuality: number;    // جودة الجايروسكوب (1-10)
   processorTier: 'flagship' | 'high' | 'mid' | 'low';  // فئة المعالج
+  processor?: ProcessorMetadata;                         // المعالج وGPU والحرارة
 }
 
 export interface Device {
@@ -340,24 +352,26 @@ export interface Device {
 
 export type FingerCount = 2 | 3 | 4 | 5 | 6;
 
-export type GripStyle = 
+export type GripStyle =
   | 'thumbs'      // إبهامين فقط
   | 'three-finger' // 3 أصابع
   | 'claw'        // 4 أصابع مخلب
   | 'five-claw'   // 5 أصابع
   | 'full-claw';  // 6 أصابع
 
-export type GyroscopeMode = 
+export type GyroscopeMode =
   | 'off'         // مغلق
   | 'scope-only'  // عند التصويب فقط
   | 'always-on';  // دائماً مفعل
 
-export type PlayStyle = 
-  | 'aggressive'  // هجومي (rusher)
-  | 'balanced'    // متوازن
-  | 'passive';    // دفاعي/قناص
+export type PlayStyle =
+  | 'aggressive'       // هجومي عام
+  | 'close-aggressive' // هجومي قريب مع دقة عالية للسكوبات البعيدة
+  | 'tournament-elite' // ملف هجومي تنافسي مخصص للبطولات
+  | 'balanced'         // متوازن
+  | 'passive';         // دفاعي/قناص
 
-export type SkillLevel = 
+export type SkillLevel =
   | 'beginner'    // مبتدئ
   | 'intermediate' // متوسط
   | 'advanced'    // متقدم
@@ -370,7 +384,8 @@ export interface PlayerSettings {
   playStyle: PlayStyle;
   skillLevel: SkillLevel;
   preferredFPS: 30 | 60 | 90 | 120;
-  fov: number;                    // 80-90
+  fov: number;                    // TPP Camera View value: 80-90
+  fppView: number;                // FPP Camera View, commonly 103
   adsMode: 'hold' | 'tap';        // طريقة التصويب
   peekMode: 'hold' | 'tap';       // طريقة الطلعة
 }
@@ -379,11 +394,11 @@ export interface PlayerSettings {
 ### 4.1.3 نوع الحساسية (Sensitivity)
 
 ```typescript
-// src/types/sensitivity.ts
+// src/types/index.ts
 
 export interface ScopeValues {
   noScope: number;     // TPP/FPP بدون سكوب
-  redDot: number;      // Red Dot / Holographic
+  redDot: number;      // Red Dot / Holographic (shared in PUBG Mobile)
   x2: number;          // 2x Scope
   x3: number;          // 3x Scope
   x4: number;          // 4x Scope
@@ -392,8 +407,8 @@ export interface ScopeValues {
 }
 
 export interface AimAssistValues {
-  aimTPP: number;      // Aim Assist TPP
-  aimFPP: number;      // Aim Assist FPP
+  aimTPP: number;      // Aim Features (TPP Aim/FPP Aim) TPP
+  aimFPP: number;      // Aim Features (TPP Aim/FPP Aim) FPP
 }
 
 export interface SensitivityCategory {
@@ -403,29 +418,30 @@ export interface SensitivityCategory {
   adsGyroscope: ScopeValues & AimAssistValues;
 }
 
-export interface AdditionalSensitivity {
-  freeLook: number;           // النظرة الحرة
-  cameraTPP: number;          // كاميرا الشخص الثالث
-  cameraFPP: number;          // كاميرا الشخص الأول
-  cameraDriving: number;      // كاميرا القيادة
-  cameraParachuting: number;  // كاميرا المظلة
-}
+// TPP Aim/FPP Aim are the Aim Features values exposed by Advanced Controls.
+// They are generated globally and once per weapon; they are not scope settings.
 
-export interface ControlSettings {
-  movementButtonSize: number;  // حجم زر الحركة (50-200)
-  fireButtonSize: number;      // حجم زر الإطلاق
-  peekButtonSize: number;      // حجم زر الطلعة
+export interface AdditionalSettings {
+  movementButtonSize: number;
+  fireButtonSize: number;
+  peekButtonSize: number;
+  freeLook: number;
+  sprintSensitivity: number;
+  fov: number;
+  fppView: number;
 }
 
 export interface GeneratedSensitivity {
-  id: string;                  // معرف فريد للحفظ
-  createdAt: Date;             // تاريخ الإنشاء
-  device: Device;              // الجهاز
-  playerSettings: PlayerSettings;  // إعدادات اللاعب
-  sensitivity: SensitivityCategory;  // الحساسية الأساسية
-  additional: AdditionalSensitivity; // حساسيات إضافية
-  controls: ControlSettings;   // إعدادات التحكم
-  explanation: SensitivityExplanation;  // الشرح
+  id: string;
+  createdAt: Date;
+  device: Device;
+  playerSettings: PlayerSettings;
+  baselineSensitivity: SensitivityCategory;
+  sensitivity: SensitivityCategory;
+  weaponSensitivities: WeaponSensitivityResult[];
+  confidence: SensitivityConfidence;
+  additional: AdditionalSettings;
+  explanations: ExplanationFactor[];
 }
 
 export interface SensitivityExplanation {
@@ -443,7 +459,7 @@ export interface SensitivityExplanation {
 ```typescript
 // src/types/weapon.ts
 
-export type WeaponCategory = 
+export type WeaponCategory =
   | 'assault-rifle'
   | 'smg'
   | 'sniper'
@@ -468,8 +484,11 @@ export interface Weapon {
   damage: number;            // الضرر
   fireRate: number;          // معدل النار (رصاصة/دقيقة)
   recoil: WeaponRecoilPattern;
+  sprayStability: number;    // ثبات الرش (1-10)
   bestScopes: string[];      // أفضل السكوبات
-  effectiveRange: 'close' | 'mid' | 'long' | 'all';
+  scopeCompatibility: ScopeId[]; // السكوبات المدعومة فعلياً
+  attachmentCompatibility: string[]; // الملحقات المتوافقة
+  effectiveRange: { minMeters: number; optimalMeters: number; maxMeters: number };
   difficulty: 'easy' | 'medium' | 'hard';  // صعوبة التحكم
   icon: string;              // إيموجي أو أيقونة
 }
@@ -581,7 +600,7 @@ export const iPhones: Device[] = [
     },
     popularityRank: 6
   },
-  
+
   // ========== iPhone 14 Series ==========
   {
     id: 'iphone-14-pro-max',
@@ -953,7 +972,7 @@ export const iPhones: Device[] = [
       processorTier: 'high'
     }
   },
-  
+
   // ========== iPhone SE Series ==========
   {
     id: 'iphone-se-3rd',
@@ -1129,7 +1148,7 @@ export const iPads: Device[] = [
       processorTier: 'flagship'
     }
   },
-  
+
   // ========== iPad Air Series ==========
   {
     id: 'ipad-air-m2',
@@ -1233,7 +1252,7 @@ export const iPads: Device[] = [
       processorTier: 'mid'
     }
   },
-  
+
   // ========== iPad Mini Series ==========
   {
     id: 'ipad-mini-6',
@@ -1534,7 +1553,7 @@ import { SensitivityCategory } from '../types/sensitivity';
  * - 4 أصابع Claw
  * - Full Gyroscope
  * - أسلوب متوازن
- * 
+ *
  * جميع الأجهزة الأخرى تُحسب كتعديل على هذه القيم
  */
 export const BASE_SENSITIVITY: SensitivityCategory = {
@@ -1602,7 +1621,7 @@ export const SENSITIVITY_RANGES = {
 
 /**
  * معاملات تعديل الحساسية بناءً على مختلف العوامل
- * 
+ *
  * القيمة 1.0 = لا تغيير
  * القيمة > 1.0 = زيادة الحساسية
  * القيمة < 1.0 = تقليل الحساسية
@@ -1791,17 +1810,17 @@ export const FOV_MULTIPLIERS = {
 // دالة مساعدة للحصول على أقرب قيمة
 // ==========================================
 export function getClosestMultiplier(
-  value: number, 
+  value: number,
   multiplierMap: Record<number, number>
 ): number {
   const keys = Object.keys(multiplierMap).map(Number).sort((a, b) => a - b);
-  
+
   // إذا كانت القيمة أقل من أصغر مفتاح
   if (value <= keys[0]) return multiplierMap[keys[0]];
-  
+
   // إذا كانت القيمة أكبر من أكبر مفتاح
   if (value >= keys[keys.length - 1]) return multiplierMap[keys[keys.length - 1]];
-  
+
   // البحث عن أقرب قيمتين والتقريب
   for (let i = 0; i < keys.length - 1; i++) {
     if (value >= keys[i] && value <= keys[i + 1]) {
@@ -1811,7 +1830,7 @@ export function getClosestMultiplier(
       return multiplierMap[lower] + ratio * (multiplierMap[upper] - multiplierMap[lower]);
     }
   }
-  
+
   return 1.0;
 }
 ```
@@ -1848,29 +1867,29 @@ export function calculateSensitivity(
   device: Device,
   settings: PlayerSettings
 ): SensitivityCategory {
-  
+
   // 1. حساب جميع المعاملات
   const screenMultiplierNormal = getClosestMultiplier(
-    device.specs.screenSize, 
+    device.specs.screenSize,
     SCREEN_SIZE_MULTIPLIERS.normal
   );
   const screenMultiplierGyro = getClosestMultiplier(
-    device.specs.screenSize, 
+    device.specs.screenSize,
     SCREEN_SIZE_MULTIPLIERS.gyroscope
   );
-  
+
   const fpsMultiplierNormal = FPS_MULTIPLIERS.normal[settings.preferredFPS] || 1.0;
   const fpsMultiplierGyro = FPS_MULTIPLIERS.gyroscope[settings.preferredFPS] || 1.0;
-  
+
   const gyroQualityMultiplier = GYROSCOPE_QUALITY_MULTIPLIERS[device.specs.gyroscopeQuality] || 1.0;
-  
+
   const gripMultiplierNormal = GRIP_MULTIPLIERS.normal[settings.gripStyle] || 1.0;
   const gripMultiplierGyro = GRIP_MULTIPLIERS.gyroscope[settings.gripStyle] || 1.0;
-  
+
   const gyroModeMultiplierCamera = GYROSCOPE_MODE_MULTIPLIERS.camera[settings.gyroscopeMode];
   const gyroModeMultiplierAds = GYROSCOPE_MODE_MULTIPLIERS.ads[settings.gyroscopeMode];
   const gyroModeMultiplierGyro = GYROSCOPE_MODE_MULTIPLIERS.gyroscope[settings.gyroscopeMode];
-  
+
   const playstyleMultipliers = PLAYSTYLE_MULTIPLIERS;
   const skillMultiplier = SKILL_LEVEL_MULTIPLIERS[settings.skillLevel] || 1.0;
   const fovMultiplier = getClosestMultiplier(settings.fov, FOV_MULTIPLIERS);
@@ -1946,9 +1965,9 @@ function calculateCategoryValues(
   fovMult: number,
   category: 'camera' | 'ads' | 'gyroscope' | 'adsGyroscope'
 ): ScopeValues & { aimTPP: number; aimFPP: number } {
-  
+
   const range = SENSITIVITY_RANGES[category];
-  
+
   const calculateValue = (baseValue: number): number => {
     let value = baseValue;
     value *= screenMult;
@@ -1959,7 +1978,7 @@ function calculateCategoryValues(
     value *= playstyleMult;
     value *= skillMult;
     value *= fovMult;
-    
+
     // التقريب والحد ضمن النطاق
     value = Math.round(value);
     return Math.max(range.min, Math.min(range.max, value));
@@ -1987,9 +2006,9 @@ export function calculateMovementButtonSize(
 ): number {
   // شاشة أكبر = زر أصغر نسبياً
   // أصابع أكثر = زر أكبر (لسهولة الوصول)
-  
+
   let baseSize = 100;
-  
+
   // تعديل حسب حجم الشاشة
   if (screenSize < 5.5) baseSize = 130;
   else if (screenSize < 6.0) baseSize = 120;
@@ -1997,11 +2016,11 @@ export function calculateMovementButtonSize(
   else if (screenSize < 7.0) baseSize = 100;
   else if (screenSize < 10) baseSize = 90;
   else baseSize = 75; // تابلت
-  
+
   // تعديل حسب عدد الأصابع
   if (fingerCount >= 5) baseSize += 20;
   else if (fingerCount >= 4) baseSize += 10;
-  
+
   return Math.min(200, Math.max(50, baseSize));
 }
 
@@ -2093,11 +2112,11 @@ export function calculateWeaponSensitivity(
   baseSensitivity: SensitivityCategory,
   weapon: Weapon
 ): WeaponSensitivityAdjustment {
-  
+
   // معامل ADS يعتمد على صعوبة الارتداد
   let adsMultiplier = 1.0;
   let gyroMultiplier = 1.0;
-  
+
   // تعديل حسب الارتداد العمودي
   if (weapon.recoil.vertical >= 8) {
     adsMultiplier *= 0.92;  // ارتداد عالي = حساسية أقل
@@ -2109,13 +2128,13 @@ export function calculateWeaponSensitivity(
     adsMultiplier *= 1.04;  // ارتداد منخفض = يمكن رفع الحساسية
     gyroMultiplier *= 1.02;
   }
-  
+
   // تعديل حسب الارتداد الأفقي
   if (weapon.recoil.horizontal >= 6) {
     adsMultiplier *= 0.95;
     gyroMultiplier *= 0.97;
   }
-  
+
   // تعديل حسب معدل النار
   if (weapon.fireRate >= 800) {
     // معدل نار عالي جداً (مثل MG3)
@@ -2125,7 +2144,7 @@ export function calculateWeaponSensitivity(
     adsMultiplier *= 0.97;
     gyroMultiplier *= 0.96;
   }
-  
+
   // تعديل حسب نوع السلاح
   switch (weapon.category) {
     case 'sniper':
@@ -2160,14 +2179,14 @@ export function calculateWeaponSensitivity(
  */
 function generateWeaponTips(weapon: Weapon): { en: string; ar: string } {
   const tips: { en: string; ar: string }[] = [];
-  
+
   if (weapon.recoil.vertical >= 8) {
     tips.push({
       en: 'High vertical recoil - pull down firmly while spraying',
       ar: 'ارتداد عمودي عالي - اسحب للأسفل بقوة أثناء الرش'
     });
   }
-  
+
   if (weapon.recoil.pattern === 'left') {
     tips.push({
       en: 'Recoil pulls left - compensate by pulling right',
@@ -2179,14 +2198,14 @@ function generateWeaponTips(weapon: Weapon): { en: string; ar: string } {
       ar: 'الارتداد يميل لليمين - عوّض بالسحب لليسار'
     });
   }
-  
+
   if (weapon.category === 'sniper') {
     tips.push({
       en: 'Pre-aim head level for quick headshots',
       ar: 'صوّب على مستوى الرأس مسبقاً للهيدشوت السريع'
     });
   }
-  
+
   // إرجاع أول نصيحة أو نصيحة افتراضية
   return tips[0] || {
     en: 'Practice spray control in training mode',
@@ -2204,6 +2223,73 @@ export function calculateAllWeaponSensitivities(
   return weapons.map(weapon => calculateWeaponSensitivity(baseSensitivity, weapon));
 }
 ```
+
+### 5.2.1 التنفيذ الرياضي الحالي في المستودع
+
+التنفيذ الفعلي للمرحلة الثانية موجود في:
+
+```text
+src/types/index.ts
+src/data/constants.ts
+src/data/weapons.ts
+src/utils/sensitivity-engine.ts
+src/utils/weapon-sensitivity-calculator.ts
+src/utils/confidence.ts
+src/utils/calibration.ts
+src/components/results/WeaponSensitivity.tsx
+src/components/results/WeaponSensitivityCard.tsx
+src/components/results/ConfidencePanel.tsx
+src/components/results/CalibrationPanel.tsx
+src/utils/*.test.ts
+```
+
+لا تنتج الخوارزمية رقماً ثابتاً للسلاح. بل تحسب كل زوج `weapon-scope` بشكل مستقل وفق المعادلة التالية:
+
+```text
+curveRecoilLoad = average(recoilCurve.vertical) × 0.50
+                 + average(abs(recoilCurve.horizontal)) × 0.25
+                 + horizontalVariance × 0.15
+                 + (1 - average(recoilCurve.recovery)) × 0.10
+
+recoilLoad = 0.30 × scalarRecoilLoad
+           + 0.70 × curveRecoilLoad
+
+fireRateLoad = normalize(fireRate, 300, 1100)
+
+canonical = calculateSensitivity(device, playerSettings)
+
+ADS = clamp(
+  canonical.ads[scope]
+  × weaponAdsFactor
+  × scopePrecisionFactor
+  × rangeFit,
+  1,
+  200
+)
+
+GYRO = clamp(
+  canonical.gyroscope[scope]
+  × weaponGyroFactor
+  × scopeGyroControl,
+  0,
+  400
+)
+
+ADS_GYRO = clamp(
+  canonical.adsGyroscope[scope]
+  × weaponGyroFactor
+  × scopeGyroControl
+  × scopePrecisionFactor,
+  0,
+  400
+)
+```
+
+وتدخل عوامل الجهاز التالية في `deviceNormalFactor` و`deviceGyroFactor`: حجم الشاشة، FPS الفعلي بعد مقارنته بحد الجهاز، معدل تحديث الشاشة، معدل أخذ اللمس، جودة الجايرو، وفئة المعالج.
+
+كل سلاح يحتوي على `sprayStability` و`recoilCurve` و`effectiveRange` و`attachmentCompatibility` و`scopeCompatibility`. ولا يتم إنشاء زوج غير مدعوم؛ فالسكوبات غير الموجودة في `scopeCompatibility` تُستبعد قبل العرض. كما يتم رفض بيانات السلاح غير الصحيحة، وتقييد Camera/ADS إلى 200 وGyro/ADS Gyro إلى 400.
+
+يدعم النموذج السكوبات التي يمكن إدخالها فعلياً في PUBG Mobile: `No Scope`, `Red Dot / Holographic`, `2x`, `3x`, `4x`, `6x`, و`8x`. لا يعرض Red Dot وHolographic كإعدادين منفصلين لأنهما يشتركان في خانة اللعبة. وتعرض الواجهة لكل سكوب مدعوم حساسية Camera وADS وGyroscope وADS Gyroscope، بينما تعرض Aim Features (TPP Aim/FPP Aim) مرة واحدة لكل سلاح خارج جدول السكوبات.
 
 ---
 
@@ -2448,7 +2534,7 @@ export const DESIGN_SYSTEM = {
       oneplus: '#eb0028'
     }
   },
-  
+
   // التباعد
   spacing: {
     xs: '0.25rem',   // 4px
@@ -2459,7 +2545,7 @@ export const DESIGN_SYSTEM = {
     '2xl': '3rem',   // 48px
     '3xl': '4rem'    // 64px
   },
-  
+
   // الزوايا المستديرة
   borderRadius: {
     sm: '0.375rem',  // 6px
@@ -2469,7 +2555,7 @@ export const DESIGN_SYSTEM = {
     '2xl': '1.5rem', // 24px
     full: '9999px'
   },
-  
+
   // الظلال
   shadows: {
     sm: '0 1px 2px rgba(0,0,0,0.3)',
@@ -2480,7 +2566,7 @@ export const DESIGN_SYSTEM = {
       success: '0 0 20px rgba(34, 197, 94, 0.3)'
     }
   },
-  
+
   // الخطوط
   typography: {
     fontFamily: {
@@ -2499,7 +2585,7 @@ export const DESIGN_SYSTEM = {
       '5xl': '3rem'     // 48px
     }
   },
-  
+
   // الحركات
   animations: {
     duration: {
@@ -2543,7 +2629,7 @@ export interface Translations {
     resetButton: string;
     loading: string;
   };
-  
+
   // الخطوات
   steps: {
     step1Title: string;
@@ -2557,7 +2643,7 @@ export interface Translations {
     step5Title: string;
     step5Subtitle: string;
   };
-  
+
   // الأجهزة
   devices: {
     searchPlaceholder: string;
@@ -2569,7 +2655,7 @@ export interface Translations {
     screenSize: string;
     gyroQuality: string;
   };
-  
+
   // الفريمات
   fps: {
     title: string;
@@ -2578,7 +2664,7 @@ export interface Translations {
     supportsUpTo: string;
     tip: string;
   };
-  
+
   // الأصابع
   fingers: {
     title: string;
@@ -2590,7 +2676,7 @@ export interface Translations {
     fiveClaw: string;
     fullClaw: string;
   };
-  
+
   // الجايروسكوب
   gyroscope: {
     title: string;
@@ -2602,7 +2688,7 @@ export interface Translations {
     alwaysOnDesc: string;
     recommended: string;
   };
-  
+
   // أسلوب اللعب
   playstyle: {
     title: string;
@@ -2613,7 +2699,7 @@ export interface Translations {
     passive: string;
     passiveDesc: string;
   };
-  
+
   // النتائج
   results: {
     title: string;
@@ -2639,7 +2725,7 @@ export interface Translations {
     movementButtonSize: string;
     explanation: string;
   };
-  
+
   // التفسيرات
   explanations: {
     screenSize: string;
@@ -2651,7 +2737,7 @@ export interface Translations {
     decreased: string;
     noChange: string;
   };
-  
+
   // الأسلحة
   weapons: {
     assaultRifles: string;
@@ -2686,7 +2772,7 @@ export const ar: Translations = {
     resetButton: 'بدء من جديد',
     loading: 'جاري التحميل...'
   },
-  
+
   steps: {
     step1Title: 'اختر جهازك',
     step1Subtitle: 'ابحث عن جهازك أو اختره من القائمة',
@@ -2699,7 +2785,7 @@ export const ar: Translations = {
     step5Title: 'أسلوب اللعب',
     step5Subtitle: 'ما هو أسلوبك المفضل في اللعب؟'
   },
-  
+
   devices: {
     searchPlaceholder: 'ابحث عن جهازك...',
     popularDevices: 'الأجهزة الشائعة',
@@ -2710,7 +2796,7 @@ export const ar: Translations = {
     screenSize: 'حجم الشاشة',
     gyroQuality: 'جودة الجايرو'
   },
-  
+
   fps: {
     title: 'معدل الإطارات (FPS)',
     subtitle: 'اختر الفريمات التي تلعب عليها فعلياً',
@@ -2718,7 +2804,7 @@ export const ar: Translations = {
     supportsUpTo: 'يدعم حتى',
     tip: '💡 الفريمات الأعلى تعني استجابة أسرع وحساسية مختلفة'
   },
-  
+
   fingers: {
     title: 'عدد الأصابع وطريقة المسك',
     fingerCount: 'كم إصبع تستخدم؟',
@@ -2729,7 +2815,7 @@ export const ar: Translations = {
     fiveClaw: '5 أصابع',
     fullClaw: 'مخلب كامل (6 أصابع)'
   },
-  
+
   gyroscope: {
     title: 'إعدادات الجايروسكوب',
     off: 'مغلق',
@@ -2740,7 +2826,7 @@ export const ar: Translations = {
     alwaysOnDesc: 'الجايرو يعمل طوال الوقت',
     recommended: '⭐ الأفضل للمحترفين'
   },
-  
+
   playstyle: {
     title: 'أسلوب اللعب',
     aggressive: 'هجومي',
@@ -2750,7 +2836,7 @@ export const ar: Translations = {
     passive: 'قناص / دفاعي',
     passiveDesc: 'أفضل القتال من بعيد، الدقة أهم من السرعة'
   },
-  
+
   results: {
     title: 'حساسيتك جاهزة!',
     subtitle: 'مخصصة لجهازك وأسلوب لعبك',
@@ -2775,7 +2861,7 @@ export const ar: Translations = {
     movementButtonSize: 'حجم زر الحركة',
     explanation: 'لماذا هذه القيم؟'
   },
-  
+
   explanations: {
     screenSize: 'حجم الشاشة',
     frameRate: 'معدل الإطارات',
@@ -2786,7 +2872,7 @@ export const ar: Translations = {
     decreased: 'تقليل',
     noChange: 'بدون تغيير'
   },
-  
+
   weapons: {
     assaultRifles: 'بنادق هجومية',
     smgs: 'رشاشات خفيفة',
@@ -2820,7 +2906,7 @@ export const en: Translations = {
     resetButton: 'Start Over',
     loading: 'Loading...'
   },
-  
+
   steps: {
     step1Title: 'Select Your Device',
     step1Subtitle: 'Search for your device or pick from the list',
@@ -2833,7 +2919,7 @@ export const en: Translations = {
     step5Title: 'Playstyle',
     step5Subtitle: 'What\'s your preferred playstyle?'
   },
-  
+
   devices: {
     searchPlaceholder: 'Search for your device...',
     popularDevices: 'Popular Devices',
@@ -2844,7 +2930,7 @@ export const en: Translations = {
     screenSize: 'Screen Size',
     gyroQuality: 'Gyro Quality'
   },
-  
+
   fps: {
     title: 'Frame Rate (FPS)',
     subtitle: 'Select the FPS you actually play on',
@@ -2852,7 +2938,7 @@ export const en: Translations = {
     supportsUpTo: 'supports up to',
     tip: '💡 Higher FPS means faster response and different sensitivity'
   },
-  
+
   fingers: {
     title: 'Fingers & Grip Style',
     fingerCount: 'How many fingers do you use?',
@@ -2863,7 +2949,7 @@ export const en: Translations = {
     fiveClaw: '5 Fingers',
     fullClaw: 'Full Claw (6 Fingers)'
   },
-  
+
   gyroscope: {
     title: 'Gyroscope Settings',
     off: 'Off',
@@ -2874,7 +2960,7 @@ export const en: Translations = {
     alwaysOnDesc: 'Gyro is active all the time',
     recommended: '⭐ Recommended for pros'
   },
-  
+
   playstyle: {
     title: 'Playstyle',
     aggressive: 'Aggressive',
@@ -2884,7 +2970,7 @@ export const en: Translations = {
     passive: 'Sniper / Passive',
     passiveDesc: 'I prefer long-range fights, precision over speed'
   },
-  
+
   results: {
     title: 'Your Sensitivity is Ready!',
     subtitle: 'Customized for your device and playstyle',
@@ -2909,7 +2995,7 @@ export const en: Translations = {
     movementButtonSize: 'Movement Button Size',
     explanation: 'Why these values?'
   },
-  
+
   explanations: {
     screenSize: 'Screen Size',
     frameRate: 'Frame Rate',
@@ -2920,7 +3006,7 @@ export const en: Translations = {
     decreased: 'Decreased',
     noChange: 'No change'
   },
-  
+
   weapons: {
     assaultRifles: 'Assault Rifles',
     smgs: 'SMGs',
@@ -2955,28 +3041,60 @@ export const en: Translations = {
 │                                                                 │
 │  المرحلة 2: التوسع                              ⏱️ 2-3 أيام      │
 │  ──────────────────                                             │
-│  □ إضافة المزيد من الأجهزة (Xiaomi, OnePlus, etc.)            │
-│  □ الترجمة الكاملة (عربي + إنجليزي)                            │
-│  □ حساسية الأسلحة                                              │
-│  □ شرح مفصل للقيم                                              │
-│  □ تحسين UI/UX                                                 │
+│  ✓ إضافة المزيد من الأجهزة (Xiaomi, OnePlus, Oppo, Huawei...) │
+│  ✓ الترجمة الكاملة (عربي + إنجليزي)                            │
+│  ✓ حساسية الأسلحة الرياضية لكل Weapon/Scope                   │
+│  ✓ شرح مفصل للقيم                                              │
+│  ✓ تحسين UI/UX                                                 │
 │                                                                 │
 │  المرحلة 3: الميزات المتقدمة                   ⏱️ 3-4 أيام      │
 │  ──────────────────────────                                     │
-│  □ حفظ الحساسيات محلياً                                        │
-│  □ مشاركة عبر رابط                                             │
-│  □ مقارنة مع المحترفين                                         │
-│  □ تعديل يدوي للقيم                                            │
-│  □ إعدادات متقدمة (FOV, حجم الأزرار)                          │
+│  ✓ حفظ الحساسيات محلياً                                        │
+│  ✓ مشاركة عبر رابط                                             │
+│  ✓ مقارنة مع المراجع التنافسية                                 │
+│  ✓ تعديل يدوي للقيم                                            │
+│  ✓ إعدادات متقدمة (FOV, حجم الأزرار)                          │
 │                                                                 │
 │  المرحلة 4: التحسينات                          ⏱️ 2-3 أيام      │
 │  ─────────────────────                                          │
-│  □ PWA (تثبيت كتطبيق)                                          │
-│  □ تحسين الأداء                                                │
-│  □ SEO                                                         │
-│  □ Analytics                                                   │
-│  □ اختبار المستخدمين                                           │
+│  ✓ PWA (تثبيت كتطبيق)                                          │
+│  ✓ تحسين الأداء                                                │
+│  ✓ SEO                                                         │
+│  ✓ Analytics محلي يحترم الخصوصية                              │
+│  ◐ أدوات اختبار المستخدمين جاهزة، والدراسة البشرية مستمرة      │
 │                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 8.1.1 خارطة الاحتراف العلمي والتنافسي
+
+هذه المراحل تضاف فوق المرحلة الأولى والثانية، ولا تستبدل خارطة التطوير الأساسية:
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│ المرحلة 5: مختبر البيانات والقياس الحقيقي       ⏱️ 4-6 أسابيع  │
+│ □ Recoil curves مقاسة فعلياً                                   │
+│ □ بروتوكول Training Ground موحد                                │
+│ □ مختبر FPS/Latency/Gyro/Thermal للأجهزة                       │
+│ □ Patch version ومصادر البيانات وData Validation               │
+├─────────────────────────────────────────────────────────────────┤
+│ المرحلة 6: التحسين والتخصيص                     ⏱️ 2-4 أسابيع  │
+│ □ Loss function متعددة الأهداف                                  │
+│ □ Constrained optimizer وPareto profiles                        │
+│ □ Bayesian player personalization                               │
+│ □ فصل baseline الحتمي عن ML وعدم استخدام ML مبكراً             │
+├─────────────────────────────────────────────────────────────────┤
+│ المرحلة 7: التحقق التنافسي                     ⏱️ 3-6 أسابيع  │
+│ □ اختبارات A/B أعمى                                             │
+│ □ لاعبو Ranked وScrims وبطولات                                  │
+│ □ Headshot/Tracking/Recoil/Overshoot metrics                    │
+│ □ Confidence intervals وRegression suite                        │
+├─────────────────────────────────────────────────────────────────┤
+│ المرحلة 8: المنتج العالمي والاستمرارية           ⏱️ مستمرة       │
+│ □ تحديثات Patch-aware للأسلحة والأجهزة                          │
+│ □ حفظ ومشاركة ومقارنة Profiles                                  │
+│ □ QA/Privacy/Data governance                                    │
+│ □ قاعدة البيانات كميزة تنافسية قابلة للدفاع                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -3032,14 +3150,14 @@ export const en: Translations = {
 
 ### معايير الإنجاز:
 
-- [ ] يمكن اختيار جهاز من القائمة
-- [ ] يمكن اختيار الفريمات
-- [ ] يمكن اختيار عدد الأصابع وطريقة المسك
-- [ ] يمكن اختيار نوع الجايروسكوب
-- [ ] يمكن اختيار أسلوب اللعب
-- [ ] يتم توليد حساسية مخصصة
-- [ ] يمكن نسخ الحساسية
-- [ ] التصميم يعمل على الجوال
+- [x] يمكن اختيار جهاز من القائمة
+- [x] يمكن اختيار الفريمات
+- [x] يمكن اختيار عدد الأصابع وطريقة المسك
+- [x] يمكن اختيار نوع الجايروسكوب
+- [x] يمكن اختيار أسلوب اللعب
+- [x] يتم توليد حساسية مخصصة
+- [x] يمكن نسخ الحساسية
+- [x] التصميم يعمل على الجوال
 
 ## 8.3 المرحلة 2: التوسع - التفاصيل
 
@@ -3079,6 +3197,34 @@ export const en: Translations = {
     └── Mobile-first improvements
 ```
 
+### مراجعة تنفيذ المرحلة الثانية
+
+حالة المستودع بعد تطبيق منطق الحساسية الرياضي:
+
+| البند | الحالة | الملاحظة |
+|------|--------|----------|
+| خوارزمية weapon/scope deterministic | مكتمل | موجودة في `weapon-sensitivity-calculator.ts` |
+| Red Dot/Holographic | مكتمل | خانة واحدة مشتركة كما تظهر في PUBG Mobile |
+| عوامل الجهاز | مكتمل | الشاشة، FPS، التحديث، اللمس، الجايرو، فئة المعالج عبر مسار واحد |
+| معالج الجهاز ومواصفاته | مكتمل | Model/GPU/Vendor/Process Node/Sustained FPS/Thermal Profile لكل جهاز في allDevices |
+| Recoil curves | مكتمل | منحنى منظم لكل سلاح مع مستوى ثقة للبيانات |
+| التحقق من توافق السكوبات | مكتمل | الأزواج غير المدعومة لا تُولد |
+| Confidence score | مكتمل | يغطي البيانات والجهاز والنموذج والمعايرة والتكرار |
+| Calibration mode | مكتمل | معايرة Training Ground حتمية ومحدودة |
+| Unit/validation tests | مكتمل | Vitest يغطي التحديد والحدود والتكرار والمعايرة |
+| بيانات الأسلحة والملحقات والمدى | مكتمل | موجودة في `data/weapons.ts` |
+| توسيع OnePlus | مكتمل | 15 جهازاً |
+| توسيع Xiaomi/Redmi/POCO | مكتمل | Xiaomi: 20، Redmi: 8، POCO: 11 |
+| Oppo/Realme | مكتمل | 30 جهازاً مجتمعاً |
+| Huawei/Honor | مكتمل | 20 جهازاً مجتمعاً |
+| الترجمة | مكتمل | ملفات ar/en، LanguageSwitcher، RTL، ورسائل المسار النشط مترجمة |
+| عرض حساسية الأسلحة | مكتمل | يعرض Camera وADS وGyro وADS Gyro والسبب والتوجيه لكل سكوب مدعوم |
+| Aim Features (TPP Aim/FPP Aim) | مكتمل | TPP Aim/FPP Aim في الأقسام الأربعة عالمياً ولكل Weapon، مستقلة عن السكوبات |
+| Close-range Aggressive Playstyle | مكتمل | سرعة No Scope/Red Dot/2x مع ثبات ودقة 3x–8x وHeadshot Focus |
+| تحسين UI/UX | مكتمل | Animations، Loading، Error handling، وMobile-first |
+
+لا يوجد مصدر حساسية ثانٍ في المسار النشط؛ `calculateSensitivity()` ينتج الملف الأساسي مرة واحدة، ثم تستهلكه خوارزمية Weapon/Scope دون إعادة تطبيق عوامل الجهاز أو اللاعب. الحساب الحالي مشتق من بيانات السلاح والسكوب والجهاز وإعدادات اللاعب، ويمكن إعادة إنتاجه بنفس المدخلات دون عشوائية.
+
 ## 8.4 المرحلة 3: الميزات المتقدمة - التفاصيل
 
 ### المهام:
@@ -3112,6 +3258,27 @@ export const en: Translations = {
     └── SkillLevel selector
 ```
 
+### مراجعة تنفيذ المرحلة الثالثة
+
+| البند | الحالة | التنفيذ |
+|------|--------|---------|
+| الحفظ المحلي | مكتمل | `useLocalStorage` و`SavedProfilesPanel` مع حد أقصى للملفات واسترجاع آمن للتاريخ |
+| المشاركة عبر رابط | مكتمل | رابط hash مشفر محلياً، يعمل بدون Backend، مع تحميل الملف عند فتح الرابط |
+| مقارنة المحترفين | مكتمل | `ComparisonPanel` مع مراجع تنافسية موصوفة بوضوح وليست بيانات لاعبين مزعومة |
+| التعديل اليدوي | مكتمل | `ManualAdjustmentPanel` يحافظ على فروق السلاح ويعيد القيم الأصلية |
+| FOV | مكتمل | FOV جزء من `PlayerSettings` ويدخل في المسار الأساسي للحساب |
+| Skill Level | مكتمل | Beginner/Intermediate/Advanced/Pro كعامل معايرة موثق |
+| أحجام الأزرار | مكتمل | Movement/Fire/Peek/Sprint/Free Look في الملف الناتج |
+| الاختبارات | مكتمل | كل تعديل يمر عبر TypeScript وVitest وProduction build |
+| Control Layout حسب اللاعب | مكتمل | FingerAssignment وHand selectors وLayout generator مرتبط بالجهاز والحساسية والأسلوب |
+
+التحسينات المضافة خارج الحد الأدنى للمرحلة:
+
+- لا يتم ادعاء أن المراجع التنافسية إعدادات لاعبين حقيقيين دون مصدر.
+- روابط المشاركة لا تحتاج خادماً ولا ترسل الملف إلى جهة خارجية.
+- تعديل قيمة عامة يحدّث فروق Weapon/Scope بدلاً من ترك النتيجة متناقضة.
+- تغيير FOV أو Skill Level يعيد توليد الملف الكامل بدلاً من تعديل رقم منفرد.
+
 ## 8.5 المرحلة 4: التحسينات - التفاصيل
 
 ### المهام:
@@ -3140,6 +3307,316 @@ export const en: Translations = {
     ├── معدل التحويل
     └── الأجهزة الشائعة
 ```
+
+### مراجعة تنفيذ المرحلة الرابعة
+
+| البند | الحالة | التنفيذ |
+|------|--------|---------|
+| PWA | مكتمل | `manifest.webmanifest` وService Worker وأيقونة التطبيق |
+| تحسين الأداء | مكتمل | الحساب يتم مرة واحدة داخل Generated Profile ونتائج الأسلحة محفوظة |
+| SEO | مكتمل | Meta tags وCanonical وJSON-LD وrobots.txt وsitemap.xml |
+| Analytics | مكتمل | عدادات محلية Privacy-first بدون إرسال بيانات خارجية |
+| اختبار المستخدمين | أدوات مكتملة | FeedbackPanel وتسجيل الملاحظات محلياً؛ الدراسة البشرية تحتاج مشاركين حقيقيين |
+| تحسينات إضافية | مكتمل | Offline shell، مشاركة بدون Backend، وخطة Data freshness |
+| Recovery وProfile IO | مكتمل | ErrorBoundary وتصدير/استيراد JSON مع التحقق من schema |
+| Synthetic validation | مكتمل | 100/100 checks اصطناعية، مع توضيح أنها لا تستبدل البشر |
+
+لا تُعتبر الدراسة البشرية مكتملة بمجرد وجود FeedbackPanel. يجب تنفيذ اختبار A/B مستقل على لاعبين حقيقيين وتوثيق النتائج في المرحلة 7.
+
+---
+
+## 8.6 المرحلة 5: مختبر البيانات والقياس الحقيقي
+
+### الهدف
+
+الانتقال من بيانات `modelled` إلى بيانات قابلة للقياس والتحقق داخل PUBG Mobile. لا يجوز اعتبار الحساسية "عالمية" قبل وجود بيانات تجريبية قابلة لإعادة الإنتاج.
+
+### المهام
+
+```
+5.1 معيار بيانات السلاح
+    ├── إضافة patchVersion وdataVersion لكل سجل
+    ├── تحديد dataSource: measured / community / modelled
+    ├── تسجيل مستوى الثقة ومصدر كل قيمة
+    ├── recoilCurve لكل رصاصة مع recovery
+    ├── تسجيل نوع الذخيرة والملحقات المستخدمة
+    └── تسجيل السكوبات والمدى ونسخة اللعبة
+
+5.2 بروتوكول Training Ground
+    ├── اختبار 10m للقتال القريب
+    ├── اختبار 30m و50m للمدى المتوسط
+    ├── اختبار 100m و200m للمدى البعيد
+    ├── رشقات 10 و20 و30 رصاصة
+    ├── تكرار كل اختبار 5 مرات على الأقل
+    ├── تسجيل Camera وADS وGyro وADS Gyro بشكل منفصل
+    └── حفظ الفيديو أو الإحداثيات مع كل تجربة
+
+5.3 مختبر الأجهزة
+    ├── قياس FPS الفعلي وليس الحد النظري فقط
+    ├── قياس frame pacing وinput latency
+    ├── قياس touch latency وtouch sampling
+    ├── قياس gyro latency وgyro noise
+    ├── اختبار الجهاز بارداً وأثناء الحرارة
+    └── تسجيل Android/iOS ونسبة الشاشة والدقة
+
+5.4 جودة البيانات
+    ├── منع السجلات المكررة
+    ├── كشف القيم الشاذة Outliers
+    ├── فصل القياس الخام عن القيمة المعتمدة
+    ├── مراجعة بشرية لكل سلاح
+    └── إنشاء Data Validation Report
+```
+
+### مخرجات المرحلة
+
+- قاعدة بيانات Recoil موثقة.
+- مصدر ونسخة لكل قيمة.
+- منحنيات حقيقية قابلة لإعادة الإنتاج.
+- تقرير اختلاف الجهاز البارد عن الجهاز الساخن.
+- رفع Confidence من `modelled` إلى `measured` عند توفر القياس.
+
+## 8.7 المرحلة 6: محرك التحسين والتخصيص
+
+### الهدف
+
+اختيار الحساسية التي تحقق أفضل توازن بين سرعة الالتقاط، دقة الهيدشوت، وثبات الارتداد بدلاً من اختيار رقم واحد بالحدس.
+
+### النموذج الرياضي
+
+```text
+loss =
+    w_recoil      × recoilTrackingError
+  + w_micro       × microControlError
+  + w_overshoot   × overshootPenalty
+  + w_headshot    × headLevelDeviation
+  + w_acquisition × targetAcquisitionTime
+  + w_jitter      × inputJitter
+```
+
+الأوزان `w_*` تتغير حسب الهدف:
+
+- Close Combat: أولوية سرعة الالتقاط والهيدشوت.
+- Mid Range: أولوية ثبات الرش وتقليل خطأ الارتداد.
+- Long Range: أولوية الميكرو-كنترول وتقليل الاهتزاز.
+- Tournament: توازن بين جميع الأهداف.
+
+### المهام
+
+```
+6.1 Constrained Optimizer
+    ├── البحث داخل حدود PUBG فقط
+    ├── منع القيم غير المدعومة
+    ├── استخدام Grid Search أو Coordinate Descent حتمي
+    ├── حفظ أفضل الحلول لا أول حل فقط
+    └── اختبار Monotonicity بين السكوبات
+
+6.2 Pareto Profiles
+    ├── Close Combat Profile
+    ├── Balanced Tournament Profile
+    ├── Mid-range Spray Profile
+    ├── Long-range Precision Profile
+    └── عرض سبب اختلاف كل Profile
+
+6.3 Bayesian Personalization
+    ├── تسجيل ملاحظات اللاعب بعد كل تجربة
+    ├── تحديث Player-specific multipliers
+    ├── عدم تغيير النموذج الأساسي بشكل عشوائي
+    ├── حفظ posterior confidence لكل لاعب
+    └── إعادة الحساب بعد عدد كافٍ من الملاحظات
+
+6.4 سياسة استخدام ML
+    ├── عدم استخدام Machine Learning قبل توفر بيانات كافية
+    ├── البدء بنموذج رياضي قابل للتفسير
+    ├── مقارنة ML مع baseline حتمي
+    ├── منع overfitting لجهاز أو لاعب واحد
+    └── حفظ تفسير القرار بجانب النتيجة
+```
+
+### قاعدة مهمة
+
+لا تُستخدم كلمة "AI" كبديل عن البيانات. النموذج القابل للتفسير مع بيانات صحيحة أفضل من نموذج أسود يتعلم من بيانات قليلة أو غير موثوقة.
+
+## 8.8 المرحلة 7: التحقق التنافسي والاختبارات البشرية
+
+### الهدف
+
+إثبات أن الحساسية تحسن الأداء فعلياً، وليس فقط أنها منطقية رياضياً.
+
+### مؤشرات القياس
+
+```
+- Headshot Rate
+- First-shot Headshot Rate
+- Time to Target
+- Recoil RMS Error
+- Vertical Recoil Error
+- Horizontal Recoil Error
+- Overshoot Rate
+- Tracking Error
+- عدد التصحيحات لكل مواجهة
+- التباين بين الجلسات
+- الأداء قبل وبعد الحرارة
+- الثبات بين الأجهزة
+```
+
+### المهام
+
+```
+7.1 اختبار A/B أعمى
+    ├── مقارنة الحساسية القديمة مع الحساسية المولدة
+    ├── عدم إخبار اللاعب أي ملف هو الجديد
+    ├── تثبيت السلاح والسكوب والمسافة
+    └── تسجيل النتائج آلياً أو بنموذج موحد
+
+7.2 عينة اللاعبين
+    ├── مبتدئون
+    ├── لاعبون متوسطون
+    ├── لاعبو Ranked
+    └── لاعبو بطولات أو Scrims
+
+7.3 التحليل الإحصائي
+    ├── Median وPercentiles
+    ├── Confidence Intervals
+    ├── اختبار Significance
+    ├── فصل أثر اللاعب عن أثر الجهاز
+    └── نشر النتائج السلبية أيضاً
+
+7.4 Regression Suite
+    ├── اختبار كل جهاز مرجعي
+    ├── اختبار كل فئة سلاح
+    ├── اختبار كل سكوب
+    ├── اختبار وضع Gyro OFF وScope-only وAlways-on
+    └── مقارنة النتائج بعد كل تعديل للنموذج
+```
+
+### معيار النجاح
+
+لا تعتمد نتيجة جديدة في الملف الأساسي إلا إذا أثبتت تحسناً قابلاً للقياس أو لم تؤدِ إلى تراجع ذي دلالة في هدف آخر. لا يكفي أن تكون القيمة أعلى أو أقل؛ يجب قياس أثرها.
+
+## 8.9 المرحلة 8: المنتج العالمي والاستمرارية
+
+### المهام
+
+```
+8.1 تحديثات اللعبة
+    ├── Patch-aware weapon data
+    ├── سجل تغييرات لكل نسخة
+    ├── إعادة اختبار الأسلحة المتأثرة
+    ├── إظهار تاريخ آخر معايرة
+    └── تحذير المستخدم عند قدم البيانات
+
+8.2 تحديث الأجهزة
+    ├── إضافة جهاز مع مصدر ومواصفات
+    ├── مراجعة الأجهزة المكررة
+    ├── قياس الأجهزة الأكثر استخداماً
+    ├── تحديد الأجهزة ذات البيانات الضعيفة
+    └── إصدار Device Data Report
+
+8.3 جودة البرمجيات
+    ├── Unit tests
+    ├── Validation tests
+    ├── Typecheck
+    ├── Production build
+    ├── اختبارات المتصفح والهاتف
+    └── مراجعة أداء قائمة الأجهزة والنتائج
+
+8.4 تجربة المستخدم
+    ├── حفظ Profiles محلياً
+    ├── مقارنة Profiles
+    ├── مشاركة النتيجة
+    ├── تصدير حساسية كل سكوب
+    ├── استرجاع آخر معايرة
+    └── عرض Confidence وData freshness بوضوح
+
+8.5 الميزة التنافسية
+    ├── قاعدة بيانات قياسات لا توجد لدى المنافسين
+    ├── Calibration Lab مخصص لكل لاعب
+    ├── تقارير أداء قابلة للتحقق
+    ├── ملفات Tournament قابلة للمقارنة
+    ├── API داخلية لمزامنة بيانات الأسلحة
+    └── حماية البيانات الخاصة والـ Profiles
+```
+
+## 8.10 الخبرات المطلوبة للفريق
+
+| الخبرة | المسؤولية الأساسية | المخرج المطلوب |
+|--------|---------------------|----------------|
+| خبير PUBG Mobile Mechanics | فهم Camera/ADS/Gyro/Scopes والملحقات | مواصفات صحيحة للعبة |
+| خبير Esports وPerformance | تعريف أهداف الهيدشوت والتتبع والارتداد | بروتوكول اختبار تنافسي |
+| مهندس Hardware/Input | قياس latency وFPS والجايرو والحرارة | Device Calibration Dataset |
+| عالم بيانات وإحصاء | تحليل A/B وConfidence وOutliers | تقارير قابلة للدفاع عنها |
+| مهندس Optimization | بناء loss function وPareto/Coordinate Descent | قيم محسنة ضمن حدود اللعبة |
+| مهندس Personalization | Bayesian updates ومعايرة اللاعب | Player-specific Profiles |
+| مهندس Data Engineering | نسخ البيانات والمصادر والـ patch | Dataset versioning pipeline |
+| مهندس Frontend/UX | عرض السبب والمعايرة والملفات | واجهة واضحة وسريعة للجوال |
+| مهندس QA | Unit/E2E/Regression/Device testing | منع تراجع النتائج |
+| مسؤول Privacy وLegal | موافقات القياس وحماية ملفات اللاعبين | استخدام آمن وموثق للبيانات |
+
+## 8.11 تعريف الحساسية الاحترافية
+
+الحساسية الاحترافية لا تعني رقماً مرتفعاً أو رقماً يشبه لاعباً مشهوراً. يجب أن تحقق على الأقل:
+
+```
+1. سرعة التقاط مقبولة في Close Range.
+2. أقل Overshoot ممكن عند مستوى الرأس.
+3. ثبات رش قابل للتكرار في Mid Range.
+4. Micro-control واضح في 4x و6x و8x.
+5. تعويض ارتداد مختلف لكل سلاح.
+6. استقرار عند تغير FPS والحرارة.
+7. نتيجة قابلة للمعايرة حسب يد اللاعب.
+8. سبب مفهوم لكل قيمة.
+9. Confidence score لا يخفي ضعف البيانات.
+10. عدم الادعاء بأنها معادلة PUBG الداخلية ما لم يثبت ذلك بقياس مستقل.
+```
+
+## 8.12 المخاطر والضوابط
+
+| الخطر | أثره | الضابط |
+|-------|------|--------|
+| بيانات ارتداد غير مقاسة | حساسية تبدو منطقية لكنها غير دقيقة | `dataConfidence` وقياسات Training Ground |
+| تغيير PUBG للميكانيكيات | تقادم النتائج | `patchVersion` وإعادة الاختبار |
+| الإفراط في Machine Learning | Overfitting ونتائج غير قابلة للتفسير | Baseline حتمي واختبارات مقارنة |
+| الخلط بين الجهاز واللاعب | توصية غير مناسبة | فصل Device Factors عن Player Calibration |
+| ارتفاع الحساسية لتحسين الهيدشوت فقط | تراجع الثبات | Loss متعددة الأهداف |
+| ادعاء ضمان الهيدشوت | فقدان الثقة | عرض القياسات والاحتمالات فقط |
+| تسريب Profiles وبيانات القياس | خطر خصوصية | موافقة المستخدم وتخزين آمن |
+
+## 8.13 الحالة الحالية والهدف النهائي
+
+الحالة الحالية بعد المرحلة الثانية:
+
+- بنية حساب موحدة.
+- 197 جهازاً مدخلاً.
+- أكثر من 30 سلاحاً مع QBZ.
+- Scope-aware وWeapon-aware engine.
+- Recoil curves نموذجية.
+- Calibration mode.
+- Confidence score.
+- Unit وValidation tests.
+
+الهدف النهائي ليس إنتاج أرقام كثيرة، بل بناء نظام يمكنه الإجابة بأدلة عن الأسئلة التالية:
+
+```text
+لماذا هذه القيمة لهذا السلاح؟
+ما مصدر بيانات الارتداد؟
+ما مقدار الثقة في النتيجة؟
+هل تحسنت النتيجة في اختبار حقيقي؟
+هل تعمل على جهاز آخر أو أثناء الحرارة؟
+هل يستطيع لاعب آخر إعادة إنتاج نفس التحسن؟
+```
+
+إذا لم نستطع الإجابة عن هذه الأسئلة، فالنظام مولد أرقام جيد، وليس بعد نظام حساسية عالمي.
+
+### حالة تنفيذ المراحل العلمية بعد الأدوات البرمجية
+
+| المرحلة | الأدوات البرمجية | ما زال يحتاج بيانات خارجية |
+|---------|------------------|-----------------------------|
+| 5: مختبر البيانات | MeasurementLabPanel، protocol، validator، dataset version | قياسات فعلية متكررة من Training Ground ومختبر الأجهزة |
+| 6: التحسين والتخصيص | Optimizer، Pareto goals، Bayesian personalization | معايرة الأوزان من نتائج لاعبين حقيقيين |
+| 7: التحقق التنافسي | ExperimentPanel، metrics، A/B data model، 22 اختباراً | تنفيذ الدراسة العمياء على عينة لاعبين وتحليلها |
+| 8: المنتج العالمي | PWA، SEO، local analytics، feedback، profiles | نشر الإنتاج، تحديثات patch، ومراجعة الخصوصية القانونية |
+
+لا يتم وضع علامة "مكتمل علمياً" على المرحلة 5 أو 7 قبل جمع البيانات البشرية والقياسات الفعلية؛ الأدوات أصبحت جاهزة، لكن القياس نفسه لا يمكن اختلاقه داخل الكود.
 
 ---
 
@@ -3202,25 +3679,25 @@ export default function ExampleComponent({
   // 1. Hooks
   const { t, isRTL } = useLanguage();
   const [state, setState] = useState(false);
-  
+
   // 2. Derived state
   const isActive = data.status === 'active';
-  
+
   // 3. Effects
   useEffect(() => {
     // Effect logic
   }, [data]);
-  
+
   // 4. Handlers
   const handleClick = () => {
     onAction(data.id);
   };
-  
+
   // 5. Render helpers (إذا لزم)
   const renderContent = () => {
     return <div>{data.content}</div>;
   };
-  
+
   // 6. Main render
   return (
     <div className={cn('base-classes', className)}>
@@ -3434,5 +3911,5 @@ const { t } = useLanguage();
 
 **نهاية الوثيقة**
 
-*آخر تحديث: 2025*
-*النسخة: 1.0.0*
+*آخر تحديث: 2026-08-01*
+*النسخة: 1.1.0*

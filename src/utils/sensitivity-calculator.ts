@@ -1,97 +1,91 @@
-import { 
-  Device, 
-  PlayerSettings, 
-  SensitivityCategory, 
-  SensitivitySet,
+import type {
+  AdditionalSettings,
+  Device,
   ExplanationFactor,
   GeneratedSensitivity,
-  AdditionalSettings
+  PlayerSettings,
+  SensitivityCategory,
+  SensitivitySet
 } from '../types';
 import {
   BASE_SENSITIVITY,
-  SENSITIVITY_RANGES,
-  SCREEN_SIZE_MULTIPLIERS,
-  FPS_MULTIPLIERS,
-  GYRO_QUALITY_MULTIPLIERS,
+  FOV_MULTIPLIERS,
+  FPP_VIEW_MULTIPLIERS,
   GRIP_MULTIPLIERS,
   GYRO_MODE_MULTIPLIERS,
   PLAYSTYLE_MULTIPLIERS,
-  getClosestMultiplier
+  SENSITIVITY_RANGES,
+  SKILL_LEVEL_MULTIPLIERS
 } from '../data/constants';
+import { weapons } from '../data/weapons';
+import { calculateAllWeaponSensitivities } from './weapon-sensitivity-calculator';
+import { calculateDeviceFactors } from './sensitivity-engine';
+import { calculateSensitivityConfidence } from './confidence';
 
 /**
- * Main function to calculate sensitivity
+ * Canonical sensitivity pipeline.
+ *
+ * This is the only function that applies device/player calibration to the
+ * global scope baseline. Weapon/scope recommendations consume its output and
+ * never apply device/player factors a second time.
  */
 export function calculateSensitivity(
   device: Device,
   settings: PlayerSettings
 ): SensitivityCategory {
-  // Calculate all multipliers
-  const screenMultNormal = getClosestMultiplier(device.specs.screenSize, SCREEN_SIZE_MULTIPLIERS.normal);
-  const screenMultGyro = getClosestMultiplier(device.specs.screenSize, SCREEN_SIZE_MULTIPLIERS.gyroscope);
-  
-  const fpsMultNormal = FPS_MULTIPLIERS.normal[settings.preferredFPS] || 1.0;
-  const fpsMultGyro = FPS_MULTIPLIERS.gyroscope[settings.preferredFPS] || 1.0;
-  
-  const gyroQualityMult = GYRO_QUALITY_MULTIPLIERS[device.specs.gyroscopeQuality] || 1.0;
-  
-  const gripMultNormal = GRIP_MULTIPLIERS.normal[settings.gripStyle] || 1.0;
-  const gripMultGyro = GRIP_MULTIPLIERS.gyroscope[settings.gripStyle] || 1.0;
-  
-  const gyroModeMultCamera = GYRO_MODE_MULTIPLIERS.camera[settings.gyroscopeMode] || 1.0;
-  const gyroModeMultAds = GYRO_MODE_MULTIPLIERS.ads[settings.gyroscopeMode] || 1.0;
-  const gyroModeMultGyro = GYRO_MODE_MULTIPLIERS.gyroscope[settings.gyroscopeMode] || 1.0;
-  
-  const playstyleMultCamera = PLAYSTYLE_MULTIPLIERS.camera[settings.playStyle] || 1.0;
-  const playstyleMultAds = PLAYSTYLE_MULTIPLIERS.ads[settings.playStyle] || 1.0;
-  const playstyleMultGyro = PLAYSTYLE_MULTIPLIERS.gyroscope[settings.playStyle] || 1.0;
-  const playstyleMultAdsGyro = PLAYSTYLE_MULTIPLIERS.adsGyroscope[settings.playStyle] || 1.0;
+  const deviceFactors = calculateDeviceFactors(device, settings);
+  const gripNormal = GRIP_MULTIPLIERS.normal[settings.gripStyle] ?? 1;
+  const gripGyro = GRIP_MULTIPLIERS.gyroscope[settings.gripStyle] ?? 1;
+  const cameraMode = GYRO_MODE_MULTIPLIERS.camera[settings.gyroscopeMode] ?? 1;
+  const adsMode = GYRO_MODE_MULTIPLIERS.ads[settings.gyroscopeMode] ?? 1;
+  const gyroMode = GYRO_MODE_MULTIPLIERS.gyroscope[settings.gyroscopeMode] ?? 0;
+  const fovFactor = FOV_MULTIPLIERS[settings.fov] ?? 1;
+  const fppViewFactor = FPP_VIEW_MULTIPLIERS[settings.fppView] ?? 1;
+  const skillFactor = SKILL_LEVEL_MULTIPLIERS[settings.skillLevel] ?? 1;
 
-  // Calculate each category
-  const camera = calculateCategoryValues(
-    BASE_SENSITIVITY.camera,
-    [screenMultNormal, fpsMultNormal, gripMultNormal, gyroModeMultCamera, playstyleMultCamera],
-    'camera'
-  );
-
-  const ads = calculateCategoryValues(
-    BASE_SENSITIVITY.ads,
-    [screenMultNormal, fpsMultNormal, gripMultNormal, gyroModeMultAds, playstyleMultAds],
-    'ads'
-  );
-
-  const gyroscope = calculateCategoryValues(
-    BASE_SENSITIVITY.gyroscope,
-    [screenMultGyro, fpsMultGyro, gyroQualityMult, gripMultGyro, gyroModeMultGyro, playstyleMultGyro],
-    'gyroscope'
-  );
-
-  const adsGyroscope = calculateCategoryValues(
-    BASE_SENSITIVITY.adsGyroscope,
-    [screenMultGyro, fpsMultGyro, gyroQualityMult, gripMultGyro, gyroModeMultGyro, playstyleMultAdsGyro],
-    'adsGyroscope'
-  );
-
-  return { camera, ads, gyroscope, adsGyroscope };
+  return {
+    camera: calculateCategoryValues(
+      BASE_SENSITIVITY.camera,
+      [deviceFactors.normal, gripNormal, cameraMode, fovFactor, skillFactor, PLAYSTYLE_MULTIPLIERS.camera[settings.playStyle] ?? 1],
+      'camera',
+      1,
+      fppViewFactor
+    ),
+    ads: calculateCategoryValues(
+      BASE_SENSITIVITY.ads,
+      [deviceFactors.normal, gripNormal, adsMode, fovFactor, skillFactor, PLAYSTYLE_MULTIPLIERS.ads[settings.playStyle] ?? 1],
+      'ads',
+      1,
+      fppViewFactor
+    ),
+    gyroscope: calculateCategoryValues(
+      BASE_SENSITIVITY.gyroscope,
+      [deviceFactors.gyro, gripGyro, gyroMode, skillFactor, PLAYSTYLE_MULTIPLIERS.gyroscope[settings.playStyle] ?? 1],
+      'gyroscope',
+      1,
+      fppViewFactor
+    ),
+    adsGyroscope: calculateCategoryValues(
+      BASE_SENSITIVITY.adsGyroscope,
+      [deviceFactors.gyro, gripGyro, gyroMode, skillFactor, PLAYSTYLE_MULTIPLIERS.adsGyroscope[settings.playStyle] ?? 1],
+      'adsGyroscope',
+      1,
+      fppViewFactor
+    )
+  };
 }
 
-/**
- * Calculate values for a single category
- */
 function calculateCategoryValues(
   base: SensitivitySet,
   multipliers: number[],
-  category: keyof typeof SENSITIVITY_RANGES
+  category: keyof typeof SENSITIVITY_RANGES,
+  aimTPPFactor = 1,
+  aimFPPFactor = 1
 ): SensitivitySet {
   const range = SENSITIVITY_RANGES[category];
-  
   const calculateValue = (baseValue: number): number => {
-    let value = baseValue;
-    for (const mult of multipliers) {
-      value *= mult;
-    }
-    value = Math.round(value);
-    return Math.max(range.min, Math.min(range.max, value));
+    const value = multipliers.reduce((result, multiplier) => result * multiplier, baseValue);
+    return Math.max(range.min, Math.min(range.max, Math.round(value)));
   };
 
   return {
@@ -102,128 +96,161 @@ function calculateCategoryValues(
     x4: calculateValue(base.x4),
     x6: calculateValue(base.x6),
     x8: calculateValue(base.x8),
-    aimTPP: calculateValue(base.aimTPP),
-    aimFPP: calculateValue(base.aimFPP)
+    aimTPP: calculateValue(base.aimTPP * aimTPPFactor),
+    aimFPP: calculateValue(base.aimFPP * aimFPPFactor)
   };
 }
 
-/**
- * Calculate movement button size
- */
 export function calculateMovementButtonSize(
   screenSize: number,
   fingerCount: number
 ): number {
   let baseSize = 100;
-  
+
   if (screenSize < 5.5) baseSize = 130;
   else if (screenSize < 6.0) baseSize = 120;
   else if (screenSize < 6.5) baseSize = 110;
   else if (screenSize < 7.0) baseSize = 100;
   else if (screenSize < 10) baseSize = 90;
   else baseSize = 75;
-  
+
   if (fingerCount >= 5) baseSize += 20;
   else if (fingerCount >= 4) baseSize += 10;
-  
+
   return Math.min(200, Math.max(50, baseSize));
 }
 
-/**
- * Generate explanation factors
- */
+function addExplanation(
+  explanations: ExplanationFactor[],
+  factor: string,
+  factorAr: string,
+  adjustment: number,
+  impact: string,
+  impactAr: string
+) {
+  if (Math.abs(adjustment) <= 1) return;
+  explanations.push({ factor, factorAr, impact, impactAr, adjustment });
+}
+
+export function calculateFireButtonSize(screenSize: number, fingerCount: number): number {
+  const base = screenSize < 6 ? 125 : screenSize < 7 ? 115 : screenSize < 10 ? 105 : 95;
+  const fingerAdjustment = fingerCount >= 5 ? 10 : fingerCount >= 4 ? 5 : 0;
+  return Math.min(200, Math.max(70, base + fingerAdjustment));
+}
+
+export function calculatePeekButtonSize(fingerCount: number, playStyle: PlayerSettings['playStyle']): number {
+  const base = playStyle === 'aggressive' ? 110 : playStyle === 'passive' ? 90 : 100;
+  return Math.min(180, Math.max(70, base + (fingerCount >= 5 ? 8 : fingerCount >= 4 ? 4 : 0)));
+}
+
+export function calculateSprintSensitivity(device: Device, settings: PlayerSettings): number {
+  const movementButton = calculateMovementButtonSize(device.specs.screenSize, settings.fingerCount);
+  const deviceFactors = calculateDeviceFactors(device, settings);
+  const playstyle = settings.playStyle === 'aggressive' || settings.playStyle === 'close-aggressive' || settings.playStyle === 'tournament-elite' ? 1.04 : settings.playStyle === 'passive' ? 0.92 : 1;
+  const buttonFactor = 1 - (movementButton - 100) * 0.001;
+  // PUBG Mobile's Sprint Sensitivity slider is capped at 100.
+  return Math.round(Math.min(100, Math.max(70, 100 * deviceFactors.normal * 0.96 * playstyle * buttonFactor)));
+}
+
 export function generateExplanations(
   device: Device,
   settings: PlayerSettings
 ): ExplanationFactor[] {
+  const factors = calculateDeviceFactors(device, settings);
   const explanations: ExplanationFactor[] = [];
 
-  // Screen size
-  const screenMult = getClosestMultiplier(device.specs.screenSize, SCREEN_SIZE_MULTIPLIERS.normal);
-  if (Math.abs(screenMult - 1) > 0.01) {
-    const adj = Math.round((screenMult - 1) * 100);
-    explanations.push({
-      factor: 'Screen Size',
-      factorAr: 'حجم الشاشة',
-      impact: screenMult > 1 ? `Increased (smaller ${device.specs.screenSize}" screen)` : `Decreased (larger ${device.specs.screenSize}" screen)`,
-      impactAr: screenMult > 1 ? `زيادة (شاشة صغيرة ${device.specs.screenSize} بوصة)` : `تقليل (شاشة كبيرة ${device.specs.screenSize} بوصة)`,
-      adjustment: adj
-    });
-  }
+  addExplanation(
+    explanations,
+    'Screen Size',
+    'حجم الشاشة',
+    Math.round((factors.screenNormal - 1) * 100),
+    factors.screenNormal > 1 ? 'Increased for a smaller screen' : 'Decreased for a larger screen',
+    factors.screenNormal > 1 ? 'زيادة لأن الشاشة أصغر' : 'تقليل لأن الشاشة أكبر'
+  );
+  addExplanation(
+    explanations,
+    'Frame Rate',
+    'معدل الإطارات',
+    Math.round((factors.fpsNormal - 1) * 100),
+    `${Math.min(settings.preferredFPS, device.specs.maxFPS)} FPS response calibration`,
+    `معايرة استجابة ${Math.min(settings.preferredFPS, device.specs.maxFPS)} FPS`
+  );
+  addExplanation(
+    explanations,
+    'Touch Response',
+    'استجابة اللمس',
+    Math.round((factors.touch - 1) * 100),
+    'Touch sampling calibration',
+    'معايرة معدل أخذ اللمس'
+  );
+  addExplanation(
+    explanations,
+    'Gyroscope Quality',
+    'جودة الجايروسكوب',
+    Math.round((factors.gyroQuality - 1) * 100),
+    'Sensor quality calibration',
+    'معايرة جودة المستشعر'
+  );
+  addExplanation(
+    explanations,
+    'Processor Tier',
+    'فئة المعالج',
+    Math.round((factors.processor - 1) * 100),
+    'Frame pacing calibration',
+    'معايرة انتظام الفريمات'
+  );
 
-  // FPS
-  const fpsMult = FPS_MULTIPLIERS.normal[settings.preferredFPS];
-  if (Math.abs(fpsMult - 1) > 0.01) {
-    const adj = Math.round((fpsMult - 1) * 100);
-    explanations.push({
-      factor: 'Frame Rate',
-      factorAr: 'معدل الإطارات',
-      impact: fpsMult > 1 ? `Increased (${settings.preferredFPS} FPS = faster response)` : `Decreased (${settings.preferredFPS} FPS)`,
-      impactAr: fpsMult > 1 ? `زيادة (${settings.preferredFPS} FPS = استجابة أسرع)` : `تقليل (${settings.preferredFPS} FPS)`,
-      adjustment: adj
-    });
-  }
+  const grip = GRIP_MULTIPLIERS.normal[settings.gripStyle] ?? 1;
+  addExplanation(
+    explanations,
+    'Grip Style',
+    'طريقة المسك',
+    Math.round((grip - 1) * 100),
+    `Adjusted for ${settings.fingerCount} fingers`,
+    `معدّل لـ ${settings.fingerCount} أصابع`
+  );
 
-  // Gyroscope quality
-  if (settings.gyroscopeMode !== 'off') {
-    const gyroQualityMult = GYRO_QUALITY_MULTIPLIERS[device.specs.gyroscopeQuality];
-    if (Math.abs(gyroQualityMult - 1) > 0.01) {
-      const adj = Math.round((gyroQualityMult - 1) * 100);
-      explanations.push({
-        factor: 'Gyroscope Quality',
-        factorAr: 'جودة الجايروسكوب',
-        impact: gyroQualityMult > 1 ? 'Increased (excellent gyro sensor)' : 'Decreased (compensating for gyro)',
-        impactAr: gyroQualityMult > 1 ? 'زيادة (مستشعر جايرو ممتاز)' : 'تقليل (تعويض جودة الجايرو)',
-        adjustment: adj
-      });
-    }
-  }
+  const playstyle = PLAYSTYLE_MULTIPLIERS.camera[settings.playStyle] ?? 1;
+  addExplanation(
+    explanations,
+    'Playstyle',
+    'أسلوب اللعب',
+    Math.round((playstyle - 1) * 100),
+    `${settings.playStyle} rotation/precision profile`,
+    `ملف ${settings.playStyle === 'aggressive' ? 'هجومي' : settings.playStyle === 'close-aggressive' ? 'هجومي قريب' : settings.playStyle === 'tournament-elite' ? 'بطولات هجومي' : settings.playStyle === 'passive' ? 'قناص' : 'متوازن'}`
+  );
 
-  // Grip style
-  const gripMult = GRIP_MULTIPLIERS.normal[settings.gripStyle];
-  if (Math.abs(gripMult - 1) > 0.01) {
-    const adj = Math.round((gripMult - 1) * 100);
-    const gripNames: Record<string, { en: string; ar: string }> = {
-      'thumbs': { en: 'Thumbs', ar: 'إبهامين' },
-      'three-finger': { en: '3 Fingers', ar: '3 أصابع' },
-      'claw': { en: '4 Finger Claw', ar: '4 أصابع مخلب' },
-      'five-claw': { en: '5 Fingers', ar: '5 أصابع' },
-      'full-claw': { en: '6 Finger Claw', ar: '6 أصابع مخلب' }
-    };
-    explanations.push({
-      factor: 'Grip Style',
-      factorAr: 'طريقة المسك',
-      impact: `Adjusted for ${gripNames[settings.gripStyle]?.en || settings.gripStyle}`,
-      impactAr: `معدّل لـ ${gripNames[settings.gripStyle]?.ar || settings.gripStyle}`,
-      adjustment: adj
-    });
-  }
+  addExplanation(
+    explanations,
+    'FOV',
+    'مجال الرؤية',
+    Math.round(((FOV_MULTIPLIERS[settings.fov] ?? 1) - 1) * 100),
+    `FOV ${settings.fov} calibration`,
+    `معايرة FOV ${settings.fov}`
+  );
+  addExplanation(
+    explanations,
+    'FPP Camera View',
+    'منظور FPP',
+    Math.round(((FPP_VIEW_MULTIPLIERS[settings.fppView] ?? 1) - 1) * 100),
+    `FPP Camera View ${settings.fppView} calibration`,
+    `معايرة منظور FPP على ${settings.fppView}`
+  );
+  addExplanation(
+    explanations,
+    'Skill Level',
+    'مستوى المهارة',
+    Math.round(((SKILL_LEVEL_MULTIPLIERS[settings.skillLevel] ?? 1) - 1) * 100),
+    `${settings.skillLevel} control profile`,
+    `ملف تحكم ${settings.skillLevel}`
+  );
 
-  // Playstyle
-  const playstyleMult = PLAYSTYLE_MULTIPLIERS.camera[settings.playStyle];
-  if (Math.abs(playstyleMult - 1) > 0.01) {
-    const adj = Math.round((playstyleMult - 1) * 100);
-    const playstyleNames: Record<string, { en: string; ar: string }> = {
-      'aggressive': { en: 'Aggressive (fast rotations)', ar: 'هجومي (دوران سريع)' },
-      'balanced': { en: 'Balanced', ar: 'متوازن' },
-      'passive': { en: 'Passive/Sniper (precision)', ar: 'قناص (دقة عالية)' }
-    };
-    explanations.push({
-      factor: 'Playstyle',
-      factorAr: 'أسلوب اللعب',
-      impact: playstyleNames[settings.playStyle]?.en || settings.playStyle,
-      impactAr: playstyleNames[settings.playStyle]?.ar || settings.playStyle,
-      adjustment: adj
-    });
-  }
-
-  // Gyroscope mode
   if (settings.gyroscopeMode === 'off') {
     explanations.push({
       factor: 'Gyroscope Mode',
       factorAr: 'وضع الجايروسكوب',
-      impact: 'Gyro OFF - camera sensitivity increased to compensate',
-      impactAr: 'الجايرو مغلق - زيادة حساسية الكاميرا للتعويض',
+      impact: 'Gyro disabled; camera compensation enabled',
+      impactAr: 'الجايرو مغلق؛ تم تفعيل تعويض الكاميرا',
       adjustment: 15
     });
   }
@@ -231,19 +258,27 @@ export function generateExplanations(
   return explanations;
 }
 
-/**
- * Generate full sensitivity result
- */
 export function generateFullSensitivity(
   device: Device,
   settings: PlayerSettings
 ): GeneratedSensitivity {
   const sensitivity = calculateSensitivity(device, settings);
+  const weaponSensitivities = calculateAllWeaponSensitivities(
+    weapons,
+    device,
+    settings,
+    sensitivity
+  );
+  const confidence = calculateSensitivityConfidence(device, weaponSensitivities);
   const explanations = generateExplanations(device, settings);
-  
   const additional: AdditionalSettings = {
     movementButtonSize: calculateMovementButtonSize(device.specs.screenSize, settings.fingerCount),
-    freeLook: device.type === 'tablet' ? 95 : 110
+    fireButtonSize: calculateFireButtonSize(device.specs.screenSize, settings.fingerCount),
+    peekButtonSize: calculatePeekButtonSize(settings.fingerCount, settings.playStyle),
+    freeLook: device.type === 'tablet' ? 95 : 110,
+    sprintSensitivity: calculateSprintSensitivity(device, settings),
+    fov: settings.fov,
+    fppView: settings.fppView
   };
 
   return {
@@ -251,7 +286,10 @@ export function generateFullSensitivity(
     createdAt: new Date(),
     device,
     playerSettings: settings,
+    baselineSensitivity: sensitivity,
     sensitivity,
+    weaponSensitivities,
+    confidence,
     additional,
     explanations
   };

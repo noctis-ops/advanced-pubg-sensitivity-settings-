@@ -14,10 +14,10 @@ const gripOptions: { value: GripStyle; minFingers: number; emoji: string }[] = [
 ];
 
 export function Step3Fingers() {
-  const { state, t, setFingers, setGrip } = useApp();
+  const { state, t, isRTL, setFingers, setGrip } = useApp();
   const currentFingers = state.playerSettings.fingerCount;
   const currentGrip = state.playerSettings.gripStyle;
-  
+
   const getGripLabel = (grip: GripStyle) => {
     const labels: Record<GripStyle, { en: string; ar: string }> = {
       'thumbs': { en: 'Thumbs Only', ar: 'إبهامين فقط' },
@@ -28,9 +28,9 @@ export function Step3Fingers() {
     };
     return labels[grip];
   };
-  
+
   const availableGrips = gripOptions.filter(g => g.minFingers <= currentFingers);
-  
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -38,7 +38,7 @@ export function Step3Fingers() {
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{t.step3Title}</h2>
         <p className="text-gray-400">{t.step3Subtitle}</p>
       </div>
-      
+
       {/* Finger count */}
       <div>
         <label className="block text-sm font-medium text-gray-400 mb-3">
@@ -62,7 +62,7 @@ export function Step3Fingers() {
           ))}
         </div>
       </div>
-      
+
       {/* Grip style */}
       <div>
         <label className="block text-sm font-medium text-gray-400 mb-3">
@@ -72,7 +72,7 @@ export function Step3Fingers() {
           {availableGrips.map(grip => {
             const isSelected = currentGrip === grip.value;
             const label = getGripLabel(grip.value);
-            
+
             return (
               <button
                 key={grip.value}
@@ -87,29 +87,29 @@ export function Step3Fingers() {
                 <span className="text-2xl">{grip.emoji}</span>
                 <div className="flex-1">
                   <p className={cn('font-semibold', isSelected ? 'text-amber-400' : 'text-white')}>
-                    {label.ar}
+                    {isRTL ? label.ar : label.en}
                   </p>
-                  <p className="text-xs text-gray-500">{label.en}</p>
+                  <p className="text-xs text-gray-500">{isRTL ? label.en : label.ar}</p>
                 </div>
               </button>
             );
           })}
         </div>
       </div>
-      
+
       {/* Visual representation */}
       <div className="flex justify-center">
         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
           <div className="flex gap-1 justify-center mb-2">
             {Array.from({ length: currentFingers }).map((_, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className="w-6 h-10 rounded-full bg-amber-500/30 border border-amber-500/50"
               />
             ))}
           </div>
           <p className="text-center text-xs text-gray-500">
-            {currentFingers} {t.fingers} • {getGripLabel(currentGrip).ar}
+            {currentFingers} {t.fingers} • {isRTL ? getGripLabel(currentGrip).ar : getGripLabel(currentGrip).en}
           </p>
         </div>
       </div>

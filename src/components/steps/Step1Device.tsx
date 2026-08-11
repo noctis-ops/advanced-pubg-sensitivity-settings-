@@ -4,37 +4,43 @@ import { cn } from '../../utils/cn';
 import { useApp } from '../../context/AppContext';
 import { allDevices, popularDevices, brandInfo, availableBrands } from '../../data/devices';
 import { Device, DeviceBrand } from '../../types';
+import { DeviceProcessorCard } from '../DeviceProcessorCard';
 
 export function Step1Device() {
   const { state, t, isRTL, setDevice } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<DeviceBrand | 'all'>('all');
-  
+  const [showAllDevices, setShowAllDevices] = useState(false);
+
   // Filter devices
   const filteredDevices = useMemo(() => {
-    let devices = selectedBrand === 'all' 
-      ? allDevices 
+    let devices = selectedBrand === 'all'
+      ? allDevices
       : allDevices.filter(d => d.brand === selectedBrand);
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      devices = devices.filter(d => 
+      devices = devices.filter(d =>
         d.name.toLowerCase().includes(query) ||
         d.nameAr.includes(query)
       );
     }
-    
+
     return devices;
   }, [searchQuery, selectedBrand]);
-  
-  const displayDevices = searchQuery ? filteredDevices : (selectedBrand === 'all' ? popularDevices : filteredDevices.slice(0, 12));
-  
+
+  const displayDevices = searchQuery
+    ? filteredDevices
+    : selectedBrand === 'all'
+      ? (showAllDevices ? filteredDevices : popularDevices)
+      : filteredDevices.slice(0, 12);
+
   const handleSelect = (device: Device) => {
     setDevice(device);
   };
 
   const ChevronIcon = isRTL ? ChevronLeft : ChevronRight;
-  
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -42,7 +48,7 @@ export function Step1Device() {
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{t.step1Title}</h2>
         <p className="text-gray-400">{t.step1Subtitle}</p>
       </div>
-      
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -54,24 +60,44 @@ export function Step1Device() {
           className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 pr-10 text-white placeholder:text-gray-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/25"
         />
       </div>
-      
+
       {/* Brand filters */}
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         <button
-          onClick={() => setSelectedBrand('all')}
+          onClick={() => {
+            setSelectedBrand('all');
+            setShowAllDevices(false);
+          }}
           className={cn(
             'px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all',
-            selectedBrand === 'all'
+            selectedBrand === 'all' && !showAllDevices
               ? 'bg-amber-500 text-white'
               : 'bg-white/5 text-gray-400 hover:bg-white/10'
           )}
         >
           {t.popularDevices}
         </button>
+        <button
+          onClick={() => {
+            setSelectedBrand('all');
+            setShowAllDevices(true);
+          }}
+          className={cn(
+            'px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all',
+            selectedBrand === 'all' && showAllDevices
+              ? 'bg-amber-500 text-white'
+              : 'bg-white/5 text-gray-400 hover:bg-white/10'
+          )}
+        >
+          {t.allDevices}
+        </button>
         {availableBrands.map(brand => (
           <button
             key={brand}
-            onClick={() => setSelectedBrand(brand)}
+            onClick={() => {
+              setSelectedBrand(brand);
+              setShowAllDevices(false);
+            }}
             className={cn(
               'px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2',
               selectedBrand === brand
@@ -80,16 +106,21 @@ export function Step1Device() {
             )}
           >
             <span>{brandInfo[brand].emoji}</span>
-            <span>{brandInfo[brand].name}</span>
+            <span>{isRTL ? brandInfo[brand].nameAr : brandInfo[brand].name}</span>
           </button>
         ))}
       </div>
-      
+
       {/* Devices grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1">
-        {displayDevices.map(device => {
+        {displayDevices.length === 0 ? (
+          <p className="col-span-full py-8 text-center text-sm text-gray-500">
+            {t.noDevicesFound}
+          </p>
+        ) : (
+          displayDevices.map(device => {
           const isSelected = state.selectedDevice?.id === device.id;
-          
+
           return (
             <button
               key={device.id}
@@ -108,7 +139,7 @@ export function Step1Device() {
               )}>
                 {device.type === 'tablet' ? <Tablet className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
               </div>
-              
+
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className={cn('font-semibold truncate', isSelected ? 'text-amber-400' : 'text-white')}>
@@ -122,22 +153,23 @@ export function Step1Device() {
                   <span>⚡{device.specs.gyroscopeQuality}/10</span>
                 </div>
               </div>
-              
+
               {/* Check */}
               {isSelected && (
                 <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center shrink-0">
                   <Check className="w-4 h-4 text-white" />
                 </div>
               )}
-              
+
               {!isSelected && (
                 <ChevronIcon className="w-4 h-4 text-gray-500 shrink-0" />
               )}
             </button>
           );
-        })}
+          })
+        )}
       </div>
-      
+
       {/* Selected device summary */}
       {state.selectedDevice && (
         <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
@@ -151,6 +183,7 @@ export function Step1Device() {
               <p className="text-gray-400">{t.screenSize}: <span className="text-white font-bold">{state.selectedDevice.specs.screenSize}"</span></p>
             </div>
           </div>
+          <DeviceProcessorCard device={state.selectedDevice} />
         </div>
       )}
     </div>
