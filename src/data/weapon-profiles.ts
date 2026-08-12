@@ -11,8 +11,18 @@ const DOMAIN_NOTE = {
   ar: 'تقدير معياري معرف من خبرة المجال؛ وليس بيانات ارتداد مستخرجة مباشرة من PUBG.'
 };
 
+const SCOPE_USAGE_PRIORS: Partial<Record<ScopeId, number>> = {
+  noScope: 1.04,
+  redDot: 1.00,
+  x2: 0.98,
+  x3: 0.94,
+  x4: 0.90,
+  x6: 0.82,
+  x8: 0.76
+};
+
 const scopes = (...ids: ScopeId[]): Partial<Record<ScopeId, number>> =>
-  Object.fromEntries(ids.map((id) => [id, 1])) as Partial<Record<ScopeId, number>>;
+  Object.fromEntries(ids.map((id) => [id, SCOPE_USAGE_PRIORS[id] ?? 1])) as Partial<Record<ScopeId, number>>;
 
 function profile(
   id: string,

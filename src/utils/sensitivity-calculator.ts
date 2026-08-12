@@ -309,7 +309,8 @@ export function generateFullSensitivity(
   const optimization = optimizeSensitivityVector(baselineSensitivity, {
     settings,
     skillProfile: playerModel.skillProfile,
-    experiments: settings.sensitivityExperiments ?? []
+    experiments: settings.sensitivityExperiments ?? [],
+    seed: 0
   });
   const sensitivity = optimization.sensitivity;
   const weaponSensitivities = calculateAllWeaponSensitivities(

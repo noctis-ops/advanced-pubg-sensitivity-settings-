@@ -1,4 +1,5 @@
 import { SCOPE_PROFILES, SENSITIVITY_RANGES } from '../data/constants';
+import { validateSensitivityExperiment } from './measurement-validator';
 import type {
   OptimizationGoal,
   PlayerSettings,
@@ -41,6 +42,8 @@ export interface SensitivityOptimizationResult {
   candidatesEvaluated: number;
   confidence: number;
   target: { camera: number; ads: number; gyroscope: number; adsGyroscope: number };
+  seed: number;
+  explorationOrder: string[];
   reason: { en: string; ar: string };
   evidence: 'measured' | 'user-provided' | 'estimated';
 }
@@ -52,6 +55,7 @@ export interface SensitivityVectorOptimizationResult {
   candidatesEvaluated: number;
   confidence: number;
   evidence: 'measured' | 'user-provided' | 'estimated';
+  seed: number;
 }
 
 const clamp = (value: number, min = 0, max = 1): number => Math.min(max, Math.max(min, value));
@@ -81,15 +85,19 @@ function skillValue(profile: PlayerSkillProfile | undefined, key: keyof PlayerSk
 
 function evidenceFor(context: SensitivityOptimizationContext): { overshoot: number; undershoot: number; recoil: number; horizontal: number; acquisition: number; corrections: number; headshot: number; tracking: number; source: 'measured' | 'user-provided' | 'estimated'; confidence: number } {
   const matches = (context.experiments ?? []).filter((item) =>
-    item.scope === context.scope &&
-    (!context.weaponId || item.weapon === context.weaponId) &&
-    item.source !== 'estimated'
+    validateSensitivityExperiment(item).length === 0
+    && item.scope === context.scope
+    && (!context.weaponId || item.weapon === context.weaponId)
+    && item.source !== 'estimated'
   );
   if (matches.length === 0) return { overshoot: 0, undershoot: 0, recoil: 0, horizontal: 0, acquisition: 0, corrections: 0, headshot: 0, tracking: 0, source: 'estimated', confidence: 0.18 };
+  const totalSamples = matches.reduce((sum, item) => sum + item.sampleCount, 0);
+  const confidenceMean = totalSamples === 0 ? 0 : matches.reduce((sum, item) => sum + item.sampleCount * item.confidence, 0) / totalSamples;
+  const evidenceInfluence = clamp(0.25 + confidenceMean * 0.75);
   const weighted = (read: (item: SensitivityExperiment) => number | undefined): number => {
     const values = matches.map((item) => ({ value: read(item), weight: item.sampleCount * item.confidence })).filter((item): item is { value: number; weight: number } => item.value !== undefined && Number.isFinite(item.value));
     const weight = values.reduce((sum, item) => sum + item.weight, 0);
-    return weight === 0 ? 0 : values.reduce((sum, item) => sum + item.value * item.weight, 0) / weight;
+    return weight === 0 ? 0 : values.reduce((sum, item) => sum + item.value * item.weight, 0) / weight * evidenceInfluence;
   };
   const source = matches.some((item) => item.source === 'measured') ? 'measured' : 'user-provided';
   return {
@@ -102,7 +110,7 @@ function evidenceFor(context: SensitivityOptimizationContext): { overshoot: numb
     headshot: clamp(weighted((item) => item.headshotRate)),
     tracking: clamp(weighted((item) => item.trackingAccuracy)),
     source,
-    confidence: clamp(0.35 + matches.length * 0.10)
+    confidence: confidenceMean
   };
 }
 
@@ -130,6 +138,19 @@ function targetForPair(pair: WeaponScopeSensitivity, context: SensitivityOptimiz
   const headshot = skillValue(skill, 'headshotScore');
   const gyroControl = skillValue(skill, 'gyroControlScore');
   const correctionStability = skillValue(skill, 'correctionStability');
+  const reaction = skillValue(skill, 'reactionScore');
+  const acquisition = skillValue(skill, 'aimAcquisition');
+  const adsControl = skillValue(skill, 'adsControl');
+  const closeRange = skillValue(skill, 'closeRangeScore');
+  const midRange = skillValue(skill, 'midRangeScore');
+  const longRange = skillValue(skill, 'longRangeScore');
+  const rangeSkill = scopeProfile.zoom <= 1 ? closeRange : scopeProfile.zoom <= 4 ? midRange : longRange;
+  const acquisitionSkill = (reaction + acquisition) / 2;
+  const scopeUsage = weapon.scopeUsage[scope] ?? 1;
+  const scopeDistance: Record<ScopeId, number> = { noScope: 0, redDot: 35, x2: 60, x3: 90, x4: 130, x6: 220, x8: 320 };
+  const rangeSpan = Math.max(weapon.effectiveEngagementRange.maxMeters - weapon.effectiveEngagementRange.minMeters, 1);
+  const rangeFit = clamp(1.02 - Math.abs(scopeDistance[scope] - weapon.effectiveEngagementRange.optimalMeters) / rangeSpan, 0.72, 1.08);
+  const burstDemand = weapon.burstCharacteristics.recoveryDemand * 0.06 + weapon.burstCharacteristics.cadence * 0.035;
   const gyroEnabled = context.settings?.gyroscopeMode !== 'off';
   const measuredOvershoot = evidence.overshoot;
   const measuredUndershoot = evidence.undershoot;
@@ -141,8 +162,10 @@ function targetForPair(pair: WeaponScopeSensitivity, context: SensitivityOptimiz
   // ADS gyro combines recoil authority with high-zoom precision.
   const cameraFactor = clamp(
     scopeProfile.cameraSpeed
-      * (0.94 + tracking * 0.08 + flick * 0.08)
+      * (0.88 + tracking * 0.07 + flick * 0.07 + acquisitionSkill * 0.10 + rangeSkill * 0.05 + weapon.trackingDemand * 0.05)
       * (0.96 + weapon.flickDemand * 0.08)
+      * scopeUsage
+      * rangeFit
       * (1 - measuredOvershoot * 0.12 + measuredUndershoot * 0.10)
       * (1 - magnificationDrag),
     0.55,
@@ -150,8 +173,10 @@ function targetForPair(pair: WeaponScopeSensitivity, context: SensitivityOptimiz
   );
   const adsFactor = clamp(
     scopeProfile.adsPrecision
-      * (0.92 + micro * 0.10 + headshot * 0.06)
+      * (0.88 + micro * 0.09 + headshot * 0.05 + adsControl * 0.10 + acquisitionSkill * 0.05 + rangeSkill * 0.14 + weapon.trackingDemand * 0.035)
       * (0.96 + weapon.stabilityDemand * 0.06 - weapon.verticalRecoilTendency * 0.04)
+      * scopeUsage
+      * rangeFit
       * (1 - measuredOvershoot * 0.08 + measuredUndershoot * 0.08)
       * (1 - magnificationDrag * 0.75),
     0.48,
@@ -159,8 +184,9 @@ function targetForPair(pair: WeaponScopeSensitivity, context: SensitivityOptimiz
   );
   const gyroFactor = gyroEnabled ? clamp(
     scopeProfile.gyroControl
-      * (0.88 + weapon.verticalRecoilTendency * 0.24 + weapon.horizontalRecoilTendency * 0.10 + weapon.fireRate * 0.07)
+      * (0.88 + weapon.verticalRecoilTendency * 0.24 + weapon.horizontalRecoilTendency * 0.10 + weapon.fireRate * 0.07 + burstDemand)
       * (0.95 + gyroControl * 0.10)
+      * scopeUsage
       * (1 + measuredRecoil * 0.20 + measuredUndershoot * 0.04 - measuredOvershoot * 0.06)
       * (1 - weapon.precisionDemand * 0.025),
     0.38,
@@ -169,8 +195,9 @@ function targetForPair(pair: WeaponScopeSensitivity, context: SensitivityOptimiz
   const adsGyroFactor = gyroEnabled ? clamp(
     scopeProfile.gyroControl
       * scopeProfile.adsPrecision
-      * (0.98 + weapon.verticalRecoilTendency * 0.27 + weapon.horizontalRecoilTendency * 0.08)
-      * (0.96 + gyroControl * 0.09 + micro * 0.08 + headshot * 0.04)
+      * (0.98 + weapon.verticalRecoilTendency * 0.27 + weapon.horizontalRecoilTendency * 0.08 + burstDemand)
+      * (0.94 + gyroControl * 0.09 + micro * 0.08 + headshot * 0.04 + adsControl * 0.16 + rangeSkill * 0.10)
+      * scopeUsage
       * (1 + measuredRecoil * 0.22 - measuredOvershoot * 0.08)
       * (1 - weapon.precisionDemand * 0.02),
     0.28,
@@ -215,12 +242,17 @@ export function generateCandidates(pair: WeaponScopeSensitivity, context: Sensit
     });
   }
   const seen = new Set<string>();
-  return candidates.filter((candidate) => {
+  const unique = candidates.filter((candidate) => {
     const key = `${candidate.camera}:${candidate.ads}:${candidate.gyroscope}:${candidate.adsGyroscope}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+  // Seed controls deterministic exploration order and tie-breaking. It does
+  // not inject random values and does not claim that a different seed must
+  // change the final optimum.
+  const rotation = unique.length === 0 ? 0 : Math.abs(context.seed ?? 0) % unique.length;
+  return unique.slice(rotation).concat(unique.slice(0, rotation));
 }
 
 export function evaluateCandidate(candidate: WeaponScopeSensitivity, context: SensitivityOptimizationContext = {}): SensitivityCandidateEvaluation {
@@ -262,6 +294,7 @@ export function rankCandidates(candidates: WeaponScopeSensitivity[], context: Se
 
 export function optimizeSensitivity(pair: WeaponScopeSensitivity, context: SensitivityOptimizationContext = {}): SensitivityOptimizationResult {
   const searchContext: SensitivityOptimizationContext = { ...context, basePair: pair };
+  const explorationOrder = generateCandidates(pair, searchContext).map((candidate) => `${candidate.camera}:${candidate.ads}:${candidate.gyroscope}:${candidate.adsGyroscope}`);
   let current = pair;
   let bestEvaluation = evaluateCandidate(current, searchContext);
   let iterations = 0;
@@ -284,6 +317,8 @@ export function optimizeSensitivity(pair: WeaponScopeSensitivity, context: Sensi
     candidatesEvaluated,
     confidence: evidence.source === 'estimated' ? 0.32 : evidence.confidence,
     target: bestEvaluation.target,
+    seed: searchContext.seed ?? 0,
+    explorationOrder,
     reason: bestEvaluation.reason,
     evidence: evidence.source
   };
@@ -318,8 +353,14 @@ function vectorLoss(candidate: SensitivityCategory, base: SensitivityCategory, c
   const micro = skillValue(skill, 'microAdjustmentScore');
   const recoil = skillValue(skill, 'recoilControlScore');
   const gyroControl = skillValue(skill, 'gyroControlScore');
-  const targetCamera = 0.94 + tracking * 0.08 + flick * 0.08;
-  const targetAds = 0.94 + tracking * 0.06 + micro * 0.08;
+  const reaction = skillValue(skill, 'reactionScore');
+  const acquisition = skillValue(skill, 'aimAcquisition');
+  const adsControl = skillValue(skill, 'adsControl');
+  const closeRange = skillValue(skill, 'closeRangeScore');
+  const midRange = skillValue(skill, 'midRangeScore');
+  const longRange = skillValue(skill, 'longRangeScore');
+  const targetCamera = 0.90 + tracking * 0.07 + flick * 0.07 + reaction * 0.04 + acquisition * 0.04 + closeRange * 0.03;
+  const targetAds = 0.90 + tracking * 0.05 + micro * 0.07 + adsControl * 0.06 + midRange * 0.04 + longRange * 0.02;
   const targetGyro = context.settings?.gyroscopeMode === 'off' ? 0 : 0.94 + gyroControl * 0.10 + (1 - recoil) * 0.08;
   const targetAdsGyro = context.settings?.gyroscopeMode === 'off' ? 0 : 0.91 + gyroControl * 0.08 + (1 - recoil) * 0.10;
   const loss = [
@@ -354,7 +395,8 @@ export function generateSensitivityCandidates(base: SensitivityCategory, context
       candidates.push(candidate);
     }
   }
-  return candidates;
+  const rotation = candidates.length === 0 ? 0 : Math.abs(context.seed ?? 0) % candidates.length;
+  return candidates.slice(rotation).concat(candidates.slice(0, rotation));
 }
 
 export function evaluateSensitivityVector(candidate: SensitivityCategory, base: SensitivityCategory, context: SensitivityOptimizationContext = {}): number {
@@ -380,7 +422,7 @@ export function optimizeSensitivityVector(base: SensitivityCategory, context: Se
   const experiments = context.experiments ?? [];
   const evidence = experiments.some((item) => item.source === 'measured') ? 'measured' : experiments.some((item) => item.source === 'user-provided') ? 'user-provided' : 'estimated';
   const confidence = evidence === 'estimated' ? 0.24 : clamp(0.42 + experiments.length * 0.04);
-  return { sensitivity: current, score: clamp(100 - currentLoss * 100, 0, 100), iterations, candidatesEvaluated, confidence, evidence };
+  return { sensitivity: current, score: clamp(100 - currentLoss * 100, 0, 100), iterations, candidatesEvaluated, confidence, evidence, seed: context.seed ?? 0 };
 }
 
 export function evaluateSensitivityLoss(pair: WeaponScopeSensitivity, goal: OptimizationGoal): number {

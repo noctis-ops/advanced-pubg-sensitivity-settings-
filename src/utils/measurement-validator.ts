@@ -35,6 +35,32 @@ export function summarizeMeasurements(measurements: TrainingGroundMeasurement[])
  * Creates a measured-looking curve only from recorded samples; it never
  * silently replaces the modelled weapon curve.
  */
+function checkUnitInterval(value: number | undefined, label: string, errors: string[]): void {
+  if (value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1)) errors.push(`${label} must be within 0..1.`);
+}
+
+export function validateSensitivityExperiment(experiment: SensitivityExperiment): string[] {
+  const errors: string[] = [];
+  if (!experiment.id || !experiment.weapon || !experiment.scope || !experiment.testType) errors.push('Experiment identity is incomplete.');
+  if (!Number.isInteger(experiment.sampleCount) || experiment.sampleCount < 1) errors.push('Experiment sampleCount must be a positive integer.');
+  if (!Number.isFinite(experiment.confidence) || experiment.confidence < 0 || experiment.confidence > 1) errors.push('Experiment confidence must be within 0..1.');
+  checkUnitInterval(experiment.trackingAccuracy, 'trackingAccuracy', errors);
+  checkUnitInterval(experiment.overshootRate, 'overshootRate', errors);
+  checkUnitInterval(experiment.undershootRate, 'undershootRate', errors);
+  checkUnitInterval(experiment.recoilDeviation, 'recoilDeviation', errors);
+  checkUnitInterval(experiment.horizontalDeviation, 'horizontalDeviation', errors);
+  checkUnitInterval(experiment.headshotRate, 'headshotRate', errors);
+  if (experiment.targetAcquisitionTime !== undefined && (!Number.isFinite(experiment.targetAcquisitionTime) || experiment.targetAcquisitionTime <= 0)) errors.push('targetAcquisitionTime must be positive.');
+  if (experiment.correctionCount !== undefined && (!Number.isFinite(experiment.correctionCount) || experiment.correctionCount < 0)) errors.push('correctionCount cannot be negative.');
+  const ranges = { camera: [1, 200], ads: [1, 200], gyroscope: [0, 400], adsGyroscope: [0, 400] } as const;
+  for (const category of Object.keys(ranges) as Array<keyof typeof ranges>) {
+    const [min, max] = ranges[category];
+    const values = experiment.sensitivityVector[category];
+    for (const value of Object.values(values)) if (!Number.isFinite(value) || value < min || value > max) errors.push(`${category} sensitivityVector contains an out-of-range value.`);
+  }
+  return errors;
+}
+
 export function measurementToRecoilSample(measurement: TrainingGroundMeasurement): RecoilSample {
   return {
     bullet: measurement.shots,
@@ -49,9 +75,11 @@ export function measurementToSensitivityExperiment(
   measurement: TrainingGroundMeasurement,
   sensitivityVector: SensitivityCategory
 ): SensitivityExperiment {
+  const measurementErrors = validateMeasurement(measurement);
+  if (measurementErrors.length > 0) throw new Error(`Cannot create experiment from invalid measurement: ${measurementErrors.join(' ')}`);
   const hitRate = measurement.shotsHit / Math.max(measurement.shots, 1);
   const headshotRate = measurement.headshots / Math.max(measurement.shotsHit, 1);
-  return {
+  const experiment: SensitivityExperiment = {
     id: `measurement-experiment-${measurement.id}`,
     sensitivityVector,
     weapon: measurement.weaponId,
@@ -71,4 +99,7 @@ export function measurementToSensitivityExperiment(
     recordedAt: measurement.recordedAt,
     notes: measurement.notes
   };
+  const experimentErrors = validateSensitivityExperiment(experiment);
+  if (experimentErrors.length > 0) throw new Error(`Cannot create invalid sensitivity experiment: ${experimentErrors.join(' ')}`);
+  return experiment;
 }

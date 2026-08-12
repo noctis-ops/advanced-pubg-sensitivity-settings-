@@ -7,6 +7,8 @@ import type {
   ControlLayoutConflict,
   ControlLayoutOptimization,
   ControlLayoutProfile,
+  GlobalLayoutCandidateEvaluation,
+  OptimizerWeightProvenanceMap,
   ControlSpec,
   Device,
   FingerAssignment,
@@ -47,6 +49,25 @@ export const DEFAULT_OPTIMIZER_WEIGHTS: OptimizerWeights = {
   simultaneousCompatibility: 1.50,
   sensitivityProfile: 0.90,
   playerSkillProfile: 0.90
+};
+
+export const OPTIMIZER_WEIGHT_PROVENANCE: OptimizerWeightProvenanceMap = {
+  reachCost: { source: 'expert-defined', rationale: 'Reach is a usability prerequisite, so it is a high positive utility.', calibrated: false },
+  fingerTravel: { source: 'expert-defined', rationale: 'Short transitions reduce action latency.', calibrated: false },
+  comfort: { source: 'expert-defined', rationale: 'Comfort is a human-factor preference below hard reach constraints.', calibrated: false },
+  frequency: { source: 'expert-defined', rationale: 'Frequently used controls deserve more usable locations.', calibrated: false },
+  fingerLoad: { source: 'expert-defined', rationale: 'Finger load is tracked as a human-factor penalty.', calibrated: false },
+  actionSynergy: { source: 'expert-defined', rationale: 'Related actions should have short travel distance.', calibrated: false },
+  fingerCompatibility: { source: 'expert-defined', rationale: 'Preferred hand/finger is a soft semantic preference.', calibrated: false },
+  overlap: { source: 'expert-defined', rationale: 'Physical overlap reduces target separability.', calibrated: false },
+  conflict: { source: 'expert-defined', rationale: 'Action conflicts are more serious than comfort preferences.', calibrated: false },
+  overload: { source: 'expert-defined', rationale: 'Overloaded fingers receive a soft penalty unless a simultaneous hard conflict exists.', calibrated: false },
+  safeArea: { source: 'expert-defined', rationale: 'Unsafe edge placement is a hard usability constraint.', calibrated: false },
+  occlusion: { source: 'expert-defined', rationale: 'Utility controls should not cover the visual center.', calibrated: false },
+  buttonSize: { source: 'expert-defined', rationale: 'Size balances touch precision and target acquisition.', calibrated: false },
+  simultaneousCompatibility: { source: 'expert-defined', rationale: 'Simultaneous actions need independent usable fingers.', calibrated: false },
+  sensitivityProfile: { source: 'expert-defined', rationale: 'Only controls related to aim interaction receive sensitivity influence.', calibrated: false },
+  playerSkillProfile: { source: 'expert-defined', rationale: 'Touch/finger skill changes interaction tolerance.', calibrated: false }
 };
 
 export interface ControlLayoutOptimizerOptions {
@@ -102,6 +123,10 @@ interface LayoutSearchResult {
   repairAttempts: number;
   conflicts: ControlLayoutConflict[];
   valid: boolean;
+  bestCandidate?: GlobalLayoutCandidateEvaluation;
+  topCandidates: GlobalLayoutCandidateEvaluation[];
+  representativeRejectedCandidates: GlobalLayoutCandidateEvaluation[];
+  rejectionStatistics: Record<string, number>;
 }
 
 const clamp = (value: number, min = 0, max = 1): number => Math.min(max, Math.max(min, value));
@@ -243,7 +268,7 @@ function spec(
   maxSize: number,
   preferredHands: HandSide[],
   preferredFingers: FingerId[],
-  options: Partial<Pick<ControlSpec, 'requiredFinger' | 'requiredHand' | 'canBeHeld' | 'simultaneousActions' | 'conflictingActions' | 'preferredZones'>> = {}
+  options: Partial<Pick<ControlSpec, 'requiredFinger' | 'requiredHand' | 'forbiddenHands' | 'forbiddenFingers' | 'canBeHeld' | 'simultaneousActions' | 'conflictingActions' | 'preferredZones'>> = {}
 ): ControlSpec {
   return {
     id,
@@ -262,17 +287,21 @@ function spec(
   };
 }
 
-export function buildControlSpecs(settings: PlayerSettings, sensitivity: SensitivityCategory): ControlSpec[] {
+export function buildControlSpecs(settings: PlayerSettings, sensitivity: SensitivityCategory, assignment?: FingerAssignment): ControlSpec[] {
   const close = settings.playStyle === 'aggressive' || settings.playStyle === 'close-aggressive' || settings.playStyle === 'tournament-elite';
   const highCameraSpeed = sensitivity.camera.noScope >= 100;
+  const fireRequiredHand = assignment && assignment.left.length >= 3 ? 'left' as const : undefined;
+  const fireRequiredFinger = fireRequiredHand && assignment?.left.includes('middle') ? 'middle' as const : undefined;
+  const scopeRequiredHand = assignment && assignment.left.length >= 3 && assignment.right.includes('index') ? 'right' as const : undefined;
+  const scopeRequiredFinger = scopeRequiredHand ? 'index' as const : undefined;
   // Four-finger grips normally execute peek as a sequential index action;
   // movement/fire/aim remain the genuinely simultaneous core set.
   const movementSimultaneous: ControlButtonId[] = close ? ['fire', 'aim', 'scope', 'jump', 'crouch'] : ['fire', 'aim', 'scope', 'jump'];
   return [
     spec('movement', 'core', 1.00, 1.00, highCameraSpeed ? 92 : 84, 142, ['left'], ['thumb'], { requiredHand: 'left', requiredFinger: 'thumb', canBeHeld: true, simultaneousActions: movementSimultaneous, preferredZones: ['left-thumb'] }),
-    spec('fire', 'core', 0.94, 1.00, 90, close ? 142 : 126, ['left', 'right'], ['index', 'middle'], { simultaneousActions: ['movement', 'aim', 'scope', 'jump'], preferredZones: ['left-index', 'right-index'] }),
+    spec('fire', 'core', 0.94, 1.00, 90, close ? 142 : 126, ['left', 'right'], ['index', 'middle'], { requiredHand: fireRequiredHand, requiredFinger: fireRequiredFinger, simultaneousActions: ['movement', 'aim', 'scope', 'jump'], preferredZones: ['left-index', 'left-middle', 'right-index'] }),
     spec('aim', 'combat', 0.88, 0.90, 82, 124, ['right'], ['thumb'], { requiredHand: 'right', requiredFinger: 'thumb', canBeHeld: true, simultaneousActions: ['movement', 'fire', 'scope', 'jump'], preferredZones: ['right-thumb'] }),
-    spec('scope', 'combat', 0.78, 0.84, 76, 116, ['right'], ['index', 'middle'], { simultaneousActions: ['movement', 'fire', 'aim'], preferredZones: ['right-index'] }),
+    spec('scope', 'combat', 0.78, 0.84, 76, 116, ['right'], ['index', 'middle'], { requiredHand: scopeRequiredHand, requiredFinger: scopeRequiredFinger, simultaneousActions: ['movement', 'fire', 'aim'], preferredZones: ['right-index'] }),
     spec('jump', 'combat', close ? 0.76 : 0.62, 0.78, 74, 108, ['right'], ['middle', 'index', 'ring'], { simultaneousActions: ['movement', 'fire', 'aim'], preferredZones: ['right-middle', 'right-index'] }),
     spec('crouch', 'combat', 0.68, 0.72, 72, 104, ['right'], ['middle', 'index', 'ring'], { simultaneousActions: ['movement', 'fire', 'aim'], preferredZones: ['right-middle', 'right-index'] }),
     spec('prone', 'utility', 0.25, 0.54, 66, 96, ['right'], ['ring', 'middle', 'index'], { conflictingActions: ['jump'], preferredZones: ['right-ring'] }),
@@ -296,6 +325,8 @@ function preferredFinger(assignment: FingerAssignment, specItem: ControlSpec): A
   const constrained = all.filter(({ hand, finger }) => {
     if (specItem.requiredHand && hand !== specItem.requiredHand) return false;
     if (specItem.requiredFinger && finger !== specItem.requiredFinger) return false;
+    if (specItem.forbiddenHands?.includes(hand)) return false;
+    if (specItem.forbiddenFingers?.includes(finger)) return false;
     return true;
   });
   const preferredFingerMatches = constrained.filter(({ finger }) => specItem.preferredFingers.includes(finger));
@@ -327,20 +358,31 @@ function buttonSize(specItem: ControlSpec, context: LayoutContext): number {
   const screenFactor = clamp(6.5 / context.device.specs.screenSize, 0.86, 1.16);
   const skillFactor = 1 + (1 - touchPrecision) * 0.12;
   const sensitivityPressure = clamp((context.sensitivity.camera.noScope + context.sensitivity.ads.redDot) / 180, 0.65, 1.45);
+  const gyroAuthority = (context.sensitivity.gyroscope.noScope + context.sensitivity.gyroscope.redDot) / 800;
+  const adsGyroAuthority = (context.sensitivity.adsGyroscope.noScope + context.sensitivity.adsGyroscope.redDot) / 800;
+  const aimRelated = ['fire', 'aim', 'scope', 'peekLeft', 'peekRight'].includes(specItem.id);
+  const sensitivityInteractionFactor = aimRelated
+    ? 1 + (gyroAuthority - 0.50) * 0.60 + (adsGyroAuthority - 0.50) * 0.40
+    : 1;
   const target = specItem.minSize + (specItem.maxSize - specItem.minSize) * (0.36 + specItem.importance * 0.42 + specItem.frequency * 0.12);
-  return Math.round(clamp(target * screenFactor * skillFactor * closeDemand * gyroReduction * (0.98 + sensitivityPressure * 0.03), specItem.minSize, specItem.maxSize));
+  return Math.round(clamp(target * screenFactor * skillFactor * closeDemand * gyroReduction * sensitivityInteractionFactor * (0.98 + sensitivityPressure * 0.03), specItem.minSize, specItem.maxSize));
 }
 
 function candidateOffsets(index: number, seed: number): Array<{ x: number; y: number }> {
   const patterns = [
-    [0, 0], [-0.28, 0], [0.28, 0], [0, -0.28], [0, 0.28], [-0.22, -0.22], [0.22, 0.22], [-0.22, 0.22], [0.22, -0.22]
+    [0, 0], [-0.42, 0], [0.42, 0], [0, -0.42], [0, 0.42],
+    [-0.78, 0], [0.78, 0], [0, -0.78], [0, 0.78],
+    [-1, 0], [1, 0], [0, -1], [0, 1],
+    [-0.55, -0.55], [0.55, 0.55], [-0.55, 0.55], [0.55, -0.55], [-0.85, -0.85], [0.85, 0.85], [-0.85, 0.85], [0.85, -0.85]
   ];
   const rotate = (seed + index) % patterns.length;
   return patterns.slice(rotate).concat(patterns.slice(0, rotate)).map(([x, y]) => ({ x, y }));
 }
 
 function clampInsideSafeArea(x: number, y: number, size: number, safeArea: LayoutContext['safeArea']): { x: number; y: number } {
-  const radius = size / 18;
+  // Keep a small numeric margin because candidates are rounded to two decimal
+  // places before validation; without it 90.28 + 85/18 can become 95.002.
+  const radius = size / 18 + 0.05;
   return {
     x: clamp(x, safeArea.left + radius, 100 - safeArea.right - radius),
     y: clamp(y, safeArea.top + radius, 100 - safeArea.bottom - radius)
@@ -354,10 +396,12 @@ export function generateCandidates(specItem: ControlSpec, context: LayoutContext
     const zone = zoneFor(context.reachZones, hand, finger);
     if (!zone) return;
     const baseSize = buttonSize(specItem, context);
+    const reachSizeFactor = 1 + clamp((16 - zone.comfortableRadius) / 100, -0.04, 0.12);
+    const calibratedBaseSize = Math.round(clamp(baseSize * reachSizeFactor, specItem.minSize, specItem.maxSize));
     const sizeOptions = Array.from(new Set([
-      baseSize,
-      Math.round(clamp(baseSize * 0.92, specItem.minSize, specItem.maxSize)),
-      Math.round(clamp(baseSize * 1.08, specItem.minSize, specItem.maxSize))
+      calibratedBaseSize,
+      Math.round(clamp(calibratedBaseSize * 0.90, specItem.minSize, specItem.maxSize)),
+      specItem.minSize
     ]));
     const offsets = candidateOffsets(fingerIndex, hashSeed(`${context.seed}:${specItem.id}:${hand}:${finger}`) % 9);
     sizeOptions.forEach((size, sizeIndex) => offsets.forEach((offset, index) => {
@@ -423,9 +467,12 @@ function simultaneousConflict(first: ControlButtonLayout, second: ControlButtonL
 }
 
 function hardConflictBetween(first: ControlButtonLayout, second: ControlButtonLayout, context: LayoutContext): boolean {
-  // Core collisions and simultaneous same-finger collisions are hard. Utility
-  // overlap remains a scored warning when the calibrated hand model is crowded.
-  return (overlapAmount(first, second) > 0.1 && first.priority === 'core' && second.priority === 'core') || simultaneousConflict(first, second, context);
+  // Core and combat buttons are interaction-critical: any physical overlap can
+  // block an action in a real match. Utility overlap remains soft only when it
+  // cannot block a core/combat action.
+  const interactionOverlap = overlapAmount(first, second) > 0.1
+    && (first.priority === 'core' || first.priority === 'combat' || second.priority === 'core' || second.priority === 'combat');
+  return interactionOverlap || simultaneousConflict(first, second, context);
 }
 
 function evaluateFingerLoad(buttons: ControlButtonLayout[]): number {
@@ -442,6 +489,14 @@ function average(values: number[]): number {
   return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function sensitivityInteractionScore(buttonId: ControlButtonId, context: LayoutContext): number {
+  const relevant = ['fire', 'aim', 'scope', 'peekLeft', 'peekRight'].includes(buttonId);
+  if (!relevant) return 0;
+  const gyroAuthority = (context.sensitivity.gyroscope.noScope + context.sensitivity.gyroscope.redDot) / 800;
+  const adsGyroAuthority = (context.sensitivity.adsGyroscope.noScope + context.sensitivity.adsGyroscope.redDot) / 800;
+  return clamp(0.5 + gyroAuthority * 0.28 + adsGyroAuthority * 0.22);
+}
+
 function sensitivityLayoutScore(buttons: ControlButtonLayout[], context: LayoutContext): number {
   const gyroSkill = context.playerModel.skillProfile.gyroControlScore.score;
   const closeDemand = context.settings.playStyle === 'aggressive' || context.settings.playStyle === 'close-aggressive' || context.settings.playStyle === 'tournament-elite' ? 1 : 0;
@@ -451,7 +506,10 @@ function sensitivityLayoutScore(buttons: ControlButtonLayout[], context: LayoutC
   const fireAimDistance = Math.hypot(aim.x - fire.x, aim.y - fire.y) / 100;
   const thumbDependency = context.settings.gyroscopeMode === 'always-on' ? 1 - gyroSkill * 0.35 : 1;
   const weaponFlickDemand = context.weaponProfile?.flickDemand ?? 0.5;
-  return clamp(1 - fireAimDistance * (0.35 + closeDemand * 0.25 + weaponFlickDemand * 0.08) - thumbDependency * 0.04);
+  const gyroAuthority = (context.sensitivity.gyroscope.noScope + context.sensitivity.gyroscope.redDot) / 800;
+  const adsGyroAuthority = (context.sensitivity.adsGyroscope.noScope + context.sensitivity.adsGyroscope.redDot) / 800;
+  const precisionInfluence = gyroAuthority * 0.05 + adsGyroAuthority * 0.05;
+  return clamp(1 - fireAimDistance * (0.35 + closeDemand * 0.25 + weaponFlickDemand * 0.08) - thumbDependency * 0.04 + precisionInfluence);
 }
 
 export function scoreLayout(buttons: ControlButtonLayout[], context: LayoutContext): { score: number; breakdown: {
@@ -484,7 +542,8 @@ export function scoreLayout(buttons: ControlButtonLayout[], context: LayoutConte
   const frequencyScore = average(buttons.map((button, index) => clamp(1 - Math.abs(button.size - (specs[index].minSize + (specs[index].maxSize - specs[index].minSize) * (0.4 + specs[index].frequency * 0.4))) / 90)));
   const fingerCompatibilityScore = average(buttons.map((button) => {
     const item = specFor(context, button.id);
-    return clamp((item.preferredHands.includes(button.assignedHand) ? 0.55 : 0) + (item.preferredFingers.includes(button.assignedFinger) ? 0.45 : 0));
+    const zoneMatch = item.preferredZones.includes(normalizeZoneName(button.assignedHand, button.assignedFinger)) ? 0.10 : 0;
+    return clamp((item.preferredHands.includes(button.assignedHand) ? 0.50 : 0) + (item.preferredFingers.includes(button.assignedFinger) ? 0.40 : 0) + zoneMatch);
   }));
   const overlaps = buttons.flatMap((button, index) => buttons.slice(index + 1).map((other) => overlapAmount(button, other))).filter((value) => value > 0);
   const overlapPenalty = clamp(average(overlaps) / 8 + overlaps.length / Math.max(buttons.length * 3, 1));
@@ -510,7 +569,8 @@ export function scoreLayout(buttons: ControlButtonLayout[], context: LayoutConte
     const item = specs[index];
     return clamp((button.size - item.minSize) / Math.max(item.maxSize - item.minSize, 1));
   }));
-  const sensitivityProfileScore = sensitivityLayoutScore(buttons, context);
+  const perControlSensitivity = buttons.filter((button) => button.sensitivityInteractionScore !== undefined).map((button) => button.sensitivityInteractionScore ?? 0);
+  const sensitivityProfileScore = clamp((sensitivityLayoutScore(buttons, context) + (perControlSensitivity.length > 0 ? average(perControlSensitivity) : 0.5)) / 2);
   const playerSkillProfileScore = clamp(0.45 + context.playerModel.skillProfile.touchPrecisionScore.score * 0.30 + context.playerModel.skillProfile.fingerControl.score * 0.25);
   const positiveWeight = context.weights.reachCost + context.weights.comfort + context.weights.frequency + context.weights.actionSynergy + context.weights.fingerCompatibility + context.weights.buttonSize + context.weights.simultaneousCompatibility + context.weights.sensitivityProfile + context.weights.playerSkillProfile;
   const positive = (
@@ -527,11 +587,11 @@ export function scoreLayout(buttons: ControlButtonLayout[], context: LayoutConte
   const penalty = (
     overlapPenalty * context.weights.overlap
     + conflictPenalty * context.weights.conflict
-    + overloadPenalty * context.weights.overload
+    + overloadPenalty * (context.weights.overload + context.weights.fingerLoad)
     + safeAreaPenalty * context.weights.safeArea
     + travelPenalty * context.weights.fingerTravel
     + occlusionPenalty * context.weights.occlusion
-  ) / (context.weights.overlap + context.weights.conflict + context.weights.overload + context.weights.safeArea + context.weights.fingerTravel + context.weights.occlusion);
+  ) / (context.weights.overlap + context.weights.conflict + context.weights.overload + context.weights.fingerLoad + context.weights.safeArea + context.weights.fingerTravel + context.weights.occlusion);
   const total = clamp(positive * 100 - penalty * 100, 0, 100);
   return {
     score: total,
@@ -561,6 +621,7 @@ function toButton(candidate: ControlLayoutCandidate, specItem: ControlSpec, cont
     priority: specItem.priority,
     candidateRank: candidate.rank,
     score: reach,
+    sensitivityInteractionScore: sensitivityInteractionScore(specItem.id, context),
     reason: {
       en: `Selected ${candidate.assignedFinger} on the ${handText}: ${reach}% comfortable reach, candidate ${candidate.rank}, and ${specItem.frequency.toFixed(2)} use frequency.`,
       ar: `اختير ${candidate.assignedFinger} في ${handTextAr}: وصول مريح ${reach}%، المرشح ${candidate.rank}، وتكرار استخدام ${specItem.frequency.toFixed(2)}.`
@@ -618,7 +679,7 @@ export function analyzeControlInputs(
   const safeArea = getSafeArea(device);
   const sensitivity = calculateSensitivity(device, settings);
   const playerModel = buildPlayerModel(device, settings, assignment);
-  const specs = buildControlSpecs(settings, sensitivity);
+  const specs = buildControlSpecs(settings, sensitivity, assignment);
   const zones = buildReachZones(device, assignment, options.reachCalibration);
   const conflicts: ControlLayoutConflict[] = errors.map((error) => ({ type: 'duplicate-responsibility', buttonIds: [], severity: 'error', reason: { en: error, ar: error } }));
   return {
@@ -644,7 +705,7 @@ function makeContext(device: Device, settings: PlayerSettings, sensitivity: Sens
   const weights: OptimizerWeights = { ...DEFAULT_OPTIMIZER_WEIGHTS, ...(options.weights ?? {}) };
   return {
     device, settings, assignment, sensitivity, playerModel, weaponProfile: options.weaponProfile, coordinateSystem, safeArea: getSafeArea(device), reachZones,
-    specs: options.controlSpecs ?? buildControlSpecs(settings, sensitivity), weights,
+    specs: options.controlSpecs ?? buildControlSpecs(settings, sensitivity, assignment), weights,
     seed: options.seed ?? stableSeed(device, settings, assignment, sensitivity)
   };
 }
@@ -658,8 +719,31 @@ function hasHardConflict(buttons: ControlButtonLayout[], context: LayoutContext)
   return false;
 }
 
-function partialScore(buttons: ControlButtonLayout[], context: LayoutContext): number {
-  return scoreLayout(buttons, context).score;
+function candidateEvaluation(
+  candidateId: string,
+  buttons: ControlButtonLayout[],
+  context: LayoutContext,
+  accepted: boolean,
+  rejected: boolean,
+  violations: ControlLayoutConflict[]
+): GlobalLayoutCandidateEvaluation {
+  const scored = scoreLayout(buttons, context);
+  return {
+    candidateId,
+    totalScore: scored.score,
+    accepted,
+    rejected,
+    rejectionReasons: violations.map((item) => item.reason.en),
+    constraintViolations: violations,
+    componentScores: scored.breakdown,
+    fingerAssignments: buttons.map((button) => ({ buttonId: button.id, hand: button.assignedHand, finger: button.assignedFinger })),
+    geometry: buttons.map((button) => ({ buttonId: button.id, x: button.x, y: button.y })),
+    buttonSizes: buttons.map((button) => ({ buttonId: button.id, size: button.size }))
+  };
+}
+
+function hardViolationsForButtons(buttons: ControlButtonLayout[], context: LayoutContext): ControlLayoutConflict[] {
+  return validateControls(buttons, buildAnalysisForContext(context), context.specs, context).filter((item) => item.severity === 'error');
 }
 
 function searchLayout(context: LayoutContext, options: ControlLayoutOptimizerOptions, repairAttempt: number): LayoutSearchResult {
@@ -671,7 +755,19 @@ function searchLayout(context: LayoutContext, options: ControlLayoutOptimizerOpt
   let states: State[] = [{ buttons: [], score: 0 }];
   let candidatesEvaluated = 0;
   let rejectedCandidates = 0;
-  const beamWidth = options.beamWidth ?? 56;
+  const topCandidates: GlobalLayoutCandidateEvaluation[] = [];
+  const representativeRejectedCandidates: GlobalLayoutCandidateEvaluation[] = [];
+  const rejectionStatistics: Record<string, number> = {};
+  const retainTop = (evaluation: GlobalLayoutCandidateEvaluation) => {
+    topCandidates.push(evaluation);
+    topCandidates.sort((left, right) => right.totalScore - left.totalScore);
+    topCandidates.splice(12);
+  };
+  const retainRejected = (evaluation: GlobalLayoutCandidateEvaluation) => {
+    representativeRejectedCandidates.push(evaluation);
+    representativeRejectedCandidates.splice(12);
+  };
+  const beamWidth = options.beamWidth ?? 40;
   for (const item of order) {
     const generated = generateCandidates(item, context);
     const overrides = options.candidateOverrides?.[item.id] ?? [];
@@ -691,9 +787,15 @@ function searchLayout(context: LayoutContext, options: ControlLayoutOptimizerOpt
         const combined = [...state.buttons, button];
         if (hasHardConflict(combined, context)) {
           rejectedCandidates += 1;
+          const violations = hardViolationsForButtons(combined, context);
+          const rejectionKey = violations.map((item) => item.type).join('+') || 'hard-conflict';
+          rejectionStatistics[rejectionKey] = (rejectionStatistics[rejectionKey] ?? 0) + 1;
+          retainRejected(candidateEvaluation(`${item.id}:${candidate.id}`, combined, context, false, true, violations.length > 0 ? violations : [{ type: 'no-valid-layout', buttonIds: [item.id], severity: 'error', reason: { en: 'Candidate violated a hard interaction constraint.', ar: 'المرشح خالف قيد تفاعل صلب.' } }]));
           continue;
         }
-        next.push({ buttons: combined, score: partialScore(combined, context) });
+        const partialEvaluation = candidateEvaluation(`${item.id}:${candidate.id}`, combined, context, true, false, []);
+        retainTop(partialEvaluation);
+        next.push({ buttons: combined, score: partialEvaluation.totalScore });
       }
     }
     next.sort((left, right) => right.score - left.score);
@@ -710,19 +812,29 @@ function searchLayout(context: LayoutContext, options: ControlLayoutOptimizerOpt
       if (left.validation.some((item) => item.severity === 'error') !== right.validation.some((item) => item.severity === 'error')) return left.validation.some((item) => item.severity === 'error') ? 1 : -1;
       return right.scored.score - left.scored.score;
     });
+  ranked.slice(0, 12).forEach((item, index) => {
+    const evaluation = candidateEvaluation(`beam-final-${index}`, item.state.buttons, context, item.validation.every((conflict) => conflict.severity !== 'error'), false, item.validation.filter((conflict) => conflict.severity === 'error'));
+    evaluation.rank = index + 1;
+    retainTop(evaluation);
+  });
   const best = ranked[0];
+  const bestCandidate = best ? candidateEvaluation('best-final', best.state.buttons, context, best.validation.every((item) => item.severity !== 'error'), false, best.validation.filter((item) => item.severity === 'error')) : undefined;
   if (!best) {
-    return { buttons: [], score: 0, scoreBreakdown: scoreLayout([], context).breakdown, iterations: order.length, candidatesEvaluated, repairAttempts: repairAttempt + (rejectedCandidates > 0 ? 1 : 0), conflicts: [{ type: 'no-valid-layout', buttonIds: [], severity: 'error', reason: { en: 'No valid layout could be generated from the active fingers and calibrated reach zones.', ar: 'تعذر إنشاء توزيع صالح من الأصابع ومناطق الوصول المعايرة.' } }], valid: false };
+    return { buttons: [], score: 0, scoreBreakdown: scoreLayout([], context).breakdown, iterations: order.length, candidatesEvaluated, repairAttempts: repairAttempt + (rejectedCandidates > 0 ? 1 : 0), conflicts: [{ type: 'no-valid-layout', buttonIds: [], severity: 'error', reason: { en: 'No valid layout could be generated from the active fingers and calibrated reach zones.', ar: 'تعذر إنشاء توزيع صالح من الأصابع ومناطق الوصول المعايرة.' } }], valid: false, topCandidates, representativeRejectedCandidates, rejectionStatistics };
   }
   return {
     buttons: best.state.buttons,
     score: best.scored.score,
+    bestCandidate,
     scoreBreakdown: best.scored.breakdown,
     iterations: order.length,
     candidatesEvaluated,
     repairAttempts: repairAttempt + (rejectedCandidates > 0 ? 1 : 0),
     conflicts: best.validation,
-    valid: best.validation.every((item) => item.severity !== 'error')
+    valid: best.validation.every((item) => item.severity !== 'error'),
+    topCandidates,
+    representativeRejectedCandidates,
+    rejectionStatistics
   };
 }
 
@@ -743,7 +855,7 @@ function buildAnalysisForContext(context: LayoutContext): ControlLayoutAnalysis 
 export function validateControls(buttons: ControlButtonLayout[], analysis: ControlLayoutAnalysis, specs?: ControlSpec[], context?: LayoutContext): ControlLayoutConflict[] {
   const safeArea = analysis.device.safeArea;
   const conflicts: ControlLayoutConflict[] = [];
-  const selectedSpecs = specs ?? buttons.map((button) => ({ id: button.id, priority: button.priority, frequency: 0, importance: 0, minSize: 0, maxSize: 200, preferredHands: [button.assignedHand], preferredFingers: [button.assignedFinger], canBeHeld: false, simultaneousActions: [], conflictingActions: [], preferredZones: [] }));
+  const selectedSpecs: ControlSpec[] = specs ?? buttons.map((button) => ({ id: button.id, priority: button.priority, frequency: 0, importance: 0, minSize: 0, maxSize: 200, preferredHands: [button.assignedHand], preferredFingers: [button.assignedFinger], canBeHeld: false, simultaneousActions: [], conflictingActions: [], preferredZones: [] }));
   const localContext = context;
   for (let index = 0; index < buttons.length; index += 1) {
     const button = buttons[index];
@@ -764,10 +876,17 @@ export function validateControls(buttons: ControlButtonLayout[], analysis: Contr
       const dy = (button.y - centerY) / Math.max(radiusY, 1);
       if (Math.hypot(dx, dy) > 1.05) conflicts.push({ type: 'unreachable', buttonIds: [button.id], severity: button.priority === 'core' ? 'error' : 'warning', reason: { en: `${button.label} is outside the critical comfortable reach zone.`, ar: `${button.labelAr} خارج منطقة الوصول المريحة الحرجة.` } });
     }
+    const buttonSpec = selectedSpecs.find((item) => item.id === button.id);
+    if (buttonSpec?.requiredHand && button.assignedHand !== buttonSpec.requiredHand) conflicts.push({ type: 'duplicate-responsibility', buttonIds: [button.id], severity: 'error', reason: { en: `${button.label} violates its required hand.`, ar: `${button.labelAr} يخالف اليد المطلوبة.` } });
+    if (buttonSpec?.requiredFinger && button.assignedFinger !== buttonSpec.requiredFinger) conflicts.push({ type: 'duplicate-responsibility', buttonIds: [button.id], severity: 'error', reason: { en: `${button.label} violates its required finger.`, ar: `${button.labelAr} يخالف الإصبع المطلوب.` } });
+    if (buttonSpec?.forbiddenHands?.includes(button.assignedHand) || buttonSpec?.forbiddenFingers?.includes(button.assignedFinger)) conflicts.push({ type: 'duplicate-responsibility', buttonIds: [button.id], severity: 'error', reason: { en: `${button.label} uses a forbidden hand or finger.`, ar: `${button.labelAr} يستخدم يداً أو إصبعاً ممنوعاً.` } });
     if (button.id === 'movement' && (button.assignedHand !== 'left' || button.assignedFinger !== 'thumb')) conflicts.push({ type: 'duplicate-responsibility', buttonIds: [button.id], severity: 'error', reason: { en: 'Movement must remain on the left thumb.', ar: 'يجب أن يبقى زر الحركة على الإبهام الأيسر.' } });
     for (let otherIndex = index + 1; otherIndex < buttons.length; otherIndex += 1) {
       const other = buttons[otherIndex];
-      if (overlapAmount(button, other) > 0.1) conflicts.push({ type: 'overlap', buttonIds: [button.id, other.id], severity: button.priority === 'core' && other.priority === 'core' ? 'error' : 'warning', reason: { en: `${button.label} overlaps ${other.label}.`, ar: `يوجد تداخل بين ${button.labelAr} و${other.labelAr}.` } });
+      if (overlapAmount(button, other) > 0.1) {
+        const hardInteractionOverlap = button.priority === 'core' || button.priority === 'combat' || other.priority === 'core' || other.priority === 'combat';
+        conflicts.push({ type: 'overlap', buttonIds: [button.id, other.id], severity: hardInteractionOverlap ? 'error' : 'warning', reason: { en: `${button.label} overlaps ${other.label}.`, ar: `يوجد تداخل بين ${button.labelAr} و${other.labelAr}.` } });
+      }
       if (localContext && simultaneousConflict(button, other, localContext)) conflicts.push({ type: 'simultaneous-conflict', buttonIds: [button.id, other.id], severity: 'error', reason: { en: `${button.label} and ${other.label} require the same finger during a simultaneous action.`, ar: `${button.labelAr} و${other.labelAr} يحتاجان الإصبع نفسه أثناء تنفيذ متزامن.` } });
     }
   }
@@ -831,7 +950,7 @@ export function optimizeControlLayout(
   const context = makeContext(device, settings, sensitivity, assignment, options);
   const assignmentErrors = validateFingerAssignment(assignment, settings.fingerCount);
   let result: LayoutSearchResult = assignmentErrors.length > 0
-    ? { buttons: [], score: 0, scoreBreakdown: scoreLayout([], context).breakdown, iterations: 0, candidatesEvaluated: 0, repairAttempts: 0, conflicts: assignmentErrors.map((error) => ({ type: 'duplicate-responsibility', buttonIds: [], severity: 'error', reason: { en: error, ar: error } })), valid: false }
+    ? { buttons: [], score: 0, scoreBreakdown: scoreLayout([], context).breakdown, iterations: 0, candidatesEvaluated: 0, repairAttempts: 0, conflicts: assignmentErrors.map((error) => ({ type: 'duplicate-responsibility', buttonIds: [], severity: 'error', reason: { en: error, ar: error } })), valid: false, topCandidates: [], representativeRejectedCandidates: [], rejectionStatistics: { 'assignment-invalid': assignmentErrors.length } }
     : searchLayout(context, options, 0);
   // Automatic repair is a second search, not a cosmetic warning. A different
   // deterministic beam order is used when the first candidate set is invalid.
@@ -839,9 +958,11 @@ export function optimizeControlLayout(
     result = searchLayout({ ...context, seed: context.seed + attempt * 7919 }, options, attempt);
   }
   const baseAnalysis = buildAnalysisForContext(context);
-  const finalResponsibilities = result.buttons.map((button) => ({ buttonId: button.id, hand: button.assignedHand, finger: button.assignedFinger }));
   const conflicts = [...baseAnalysis.conflicts, ...result.conflicts];
-  const finalAnalysis: ControlLayoutAnalysis = { ...baseAnalysis, responsibilities: finalResponsibilities, conflicts, passed: result.valid && conflicts.every((item) => item.severity !== 'error') };
+  const hardViolations = conflicts.filter((item) => item.severity === 'error');
+  const outputButtons = result.valid && hardViolations.length === 0 ? result.buttons : [];
+  const finalResponsibilities = outputButtons.map((button) => ({ buttonId: button.id, hand: button.assignedHand, finger: button.assignedFinger }));
+  const finalAnalysis: ControlLayoutAnalysis = { ...baseAnalysis, responsibilities: finalResponsibilities, conflicts, passed: outputButtons.length > 0 && result.valid && hardViolations.length === 0 };
   const optimization: ControlLayoutOptimization = {
     score: result.score,
     scoreBreakdown: result.scoreBreakdown,
@@ -850,7 +971,14 @@ export function optimizeControlLayout(
     repairAttempts: result.repairAttempts,
     seed: context.seed,
     weights: context.weights,
-    warnings: conflicts.filter((item) => item.severity === 'warning')
+    weightProvenance: OPTIMIZER_WEIGHT_PROVENANCE,
+    warnings: conflicts.filter((item) => item.severity === 'warning'),
+    hardViolations,
+    bestCandidate: result.bestCandidate,
+    topCandidates: result.topCandidates,
+    representativeRejectedCandidates: result.representativeRejectedCandidates,
+    rejectionStatistics: result.rejectionStatistics,
+    ...(hardViolations.length > 0 ? { failureReason: { en: 'No layout passed all hard constraints.', ar: 'لم ينجح أي توزيع في جميع القيود الصلبة.' } } : {})
   };
   const measuredReach = context.reachZones.some((zone) => zone.source === 'measured' || zone.source === 'user-provided');
   const confidence = Math.round(clamp(35 + result.score * 0.35 + context.playerModel.skillProfile.confidence * 15 + (measuredReach ? 12 : 0) - conflicts.filter((item) => item.severity === 'warning').length * 2, 0, 98));
@@ -859,7 +987,9 @@ export function optimizeControlLayout(
     deviceId: device.id,
     fingerAssignment: assignment,
     analysis: finalAnalysis,
-    buttons: result.buttons,
+    valid: finalAnalysis.passed,
+    hardViolations,
+    buttons: outputButtons,
     safeArea: context.safeArea,
     screenAspectRatio: context.coordinateSystem.aspectRatio,
     coordinateSystem: context.coordinateSystem,

@@ -425,7 +425,9 @@ function calculatePair(
       evidence: optimized.evidence,
       target: optimized.target,
       iterations: optimized.iterations,
-      candidatesEvaluated: optimized.candidatesEvaluated
+      candidatesEvaluated: optimized.candidatesEvaluated,
+      seed: optimized.seed,
+      explorationOrder: optimized.explorationOrder
     },
     reason: {
       en: `${initial.reason.en} Optimized by bounded grid search and coordinate descent; ${optimized.reason.en}`,

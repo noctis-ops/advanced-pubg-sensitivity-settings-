@@ -10,6 +10,7 @@ import type {
   SkillMetricValue
 } from '../types';
 import { getEffectiveFPS } from './sensitivity-engine';
+import { validateSensitivityExperiment } from './measurement-validator';
 
 const clamp = (value: number, min = 0, max = 1): number => Math.min(max, Math.max(min, value));
 
@@ -69,7 +70,7 @@ function readScore(profile: PlayerSkillProfile | undefined, key: PlayerSkillMetr
 }
 
 function experimentEvidence(experiments: SensitivityExperiment[], field: PlayerSkillMetricName): { score: number; samples: number; confidence: number; lastMeasuredAt?: string } | null {
-  const valid = experiments.filter((item) => item.sampleCount > 0 && item.confidence > 0 && item.source !== 'estimated');
+  const valid = experiments.filter((item) => validateSensitivityExperiment(item).length === 0 && item.sampleCount > 0 && item.confidence > 0 && item.source !== 'estimated');
   if (valid.length === 0) return null;
   const values = valid.map((item) => {
     switch (field) {
@@ -139,7 +140,7 @@ function experimentEvidence(experiments: SensitivityExperiment[], field: PlayerS
   return {
     score: totalWeight > 0 ? clamp(weightedScore / totalWeight) : clamp(values.reduce((sum, value) => sum + value, 0) / values.length),
     samples: weighted.reduce((sum, item) => sum + item.sampleCount, 0),
-    confidence: clamp(Math.min(0.96, 0.45 + weighted.length * 0.08)),
+    confidence: clamp(weighted.length === 0 ? 0 : weighted.reduce((sum, item) => sum + item.sampleCount * item.confidence, 0) / Math.max(weighted.reduce((sum, item) => sum + item.sampleCount, 0), 1)),
     lastMeasuredAt: weighted.map((item) => item.recordedAt).filter((value): value is string => Boolean(value)).sort().at(-1)
   };
 }
@@ -153,7 +154,8 @@ export function createPlayerSkillProfile(settings: PlayerSettings, experiments: 
     if (provided && provided.source === 'user-provided') {
       values.set(key, metric(provided.score, 'user-provided', provided.sampleCount, provided.confidence, provided.lastMeasuredAt));
     } else if (evidence) {
-      values.set(key, metric(evidence.score, 'measured', evidence.samples, evidence.confidence, evidence.lastMeasuredAt));
+      const blendedScore = priors[key] * (1 - evidence.confidence) + evidence.score * evidence.confidence;
+      values.set(key, metric(blendedScore, 'measured', evidence.samples, evidence.confidence, evidence.lastMeasuredAt));
     } else if (provided) {
       values.set(key, metric(provided.score, provided.source, provided.sampleCount, provided.confidence, provided.lastMeasuredAt));
     } else {

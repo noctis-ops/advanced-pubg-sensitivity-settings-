@@ -540,6 +540,8 @@ export interface WeaponScopeSensitivity {
     target: { camera: number; ads: number; gyroscope: number; adsGyroscope: number };
     iterations: number;
     candidatesEvaluated: number;
+    seed?: number;
+    explorationOrder?: string[];
   };
   reason: {
     en: string;
@@ -634,6 +636,8 @@ export interface ControlSpec {
   preferredFingers: FingerId[];
   requiredFinger?: FingerId;
   requiredHand?: HandSide;
+  forbiddenHands?: HandSide[];
+  forbiddenFingers?: FingerId[];
   canBeHeld: boolean;
   simultaneousActions: ControlButtonId[];
   conflictingActions: ControlButtonId[];
@@ -724,6 +728,28 @@ export interface OptimizerWeights {
   playerSkillProfile: number;
 }
 
+export interface OptimizerWeightProvenance {
+  source: 'expert-defined' | 'measured' | 'calibrated';
+  rationale: string;
+  calibrated: boolean;
+}
+
+export type OptimizerWeightProvenanceMap = Record<keyof OptimizerWeights, OptimizerWeightProvenance>;
+
+export interface GlobalLayoutCandidateEvaluation {
+  candidateId: string;
+  totalScore: number;
+  rank?: number;
+  accepted: boolean;
+  rejected: boolean;
+  rejectionReasons: string[];
+  constraintViolations: ControlLayoutConflict[];
+  componentScores: LayoutScoreBreakdown;
+  fingerAssignments: Array<{ buttonId: ControlButtonId; hand: HandSide; finger: FingerId }>;
+  geometry: Array<{ buttonId: ControlButtonId; x: number; y: number }>;
+  buttonSizes: Array<{ buttonId: ControlButtonId; size: number }>;
+}
+
 export interface LayoutScoreBreakdown {
   reachScore: number;
   comfortScore: number;
@@ -768,6 +794,7 @@ export interface ControlButtonLayout {
   reason: { en: string; ar: string };
   candidateRank?: number;
   score?: number;
+  sensitivityInteractionScore?: number;
   explainability?: {
     finger: string;
     position: string;
@@ -803,7 +830,14 @@ export interface ControlLayoutOptimization {
   repairAttempts: number;
   seed: number;
   weights: OptimizerWeights;
+  weightProvenance?: OptimizerWeightProvenanceMap;
   warnings: ControlLayoutConflict[];
+  hardViolations: ControlLayoutConflict[];
+  bestCandidate?: GlobalLayoutCandidateEvaluation;
+  topCandidates?: GlobalLayoutCandidateEvaluation[];
+  representativeRejectedCandidates?: GlobalLayoutCandidateEvaluation[];
+  rejectionStatistics?: Record<string, number>;
+  failureReason?: { en: string; ar: string };
 }
 
 export interface ControlLayoutProfile {
@@ -811,6 +845,8 @@ export interface ControlLayoutProfile {
   deviceId: string;
   fingerAssignment: FingerAssignment;
   analysis: ControlLayoutAnalysis;
+  valid: boolean;
+  hardViolations: ControlLayoutConflict[];
   buttons: ControlButtonLayout[];
   safeArea: { left: number; right: number; top: number; bottom: number };
   screenAspectRatio: number;
@@ -841,6 +877,7 @@ export interface GeneratedSensitivity {
     candidatesEvaluated: number;
     confidence: number;
     evidence: MeasurementSource;
+    seed?: number;
   };
   controlLayout?: ControlLayoutProfile;
   additional: AdditionalSettings;

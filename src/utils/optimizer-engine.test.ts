@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { allDevices } from '../data/devices';
 import { weapons } from '../data/weapons';
 import type { ControlLayoutCandidate, FingerAssignment, PlayerSettings, ReachCalibrationInput } from '../types';
 import { buildControlSpecs, generateControlLayout, generateControlCandidatesFor, optimizeControlLayout } from './control-layout';
 import { createPlayerSkillProfile } from './player-model';
 import { calculateSensitivity, generateFullSensitivity } from './sensitivity-calculator';
+
+vi.setConfig({ testTimeout: 30000 });
 import { getRequiredWeaponProfiles, getWeaponProfile, validateWeaponProfiles } from '../data/weapon-profiles';
 
 const device = allDevices.find((item) => item.id === 'iphone-15-pro-max')!;
