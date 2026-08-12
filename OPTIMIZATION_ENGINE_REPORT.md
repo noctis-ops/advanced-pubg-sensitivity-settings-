@@ -431,6 +431,44 @@ Production build: passed
 - FAMAS والـ19 Weapon Profiles.
 - deterministic same input + seed.
 
+## تصنيف جميع الخبرات والمعارف المستخدمة
+
+| التصنيف | الموجود فعلياً | المصدر/الحالة |
+|---|---|---|
+| 1. Domain Expertise | `SCOPE_PROFILES`, `ControlSpec`, `OptimizerWeights`, أولويات الأزرار وقواعد الحركة | Rule / expert prior |
+| 2. Player Skill Measurements | tracking، flick، micro، recoil، headshot، reaction وغيرها داخل `PlayerSkillProfile` | Measured عندما يسجل اللاعب تجربة؛ وإلا `estimated` |
+| 3. Weapon Knowledge | `WEAPON_PROFILES` لكل الأسلحة المطلوبة | Expert-defined normalized، وليس telemetry |
+| 4. Recoil Knowledge | `recoilCurve` وvertical/horizontal tendencies وrecoil demand | Modelled حالياً؛ يمكن استبداله بقياس Training Ground |
+| 5. Scope/Magnification Knowledge | `ScopeId` و`SCOPE_PROFILES` من No Scope إلى 8x | Rule/domain model |
+| 6. Gyroscope Expertise | فصل Gyro وADS Gyro، gyro control skill، recoil authority، practical floor | Formula + estimated/user/measured skill؛ لا توجد حركة sensor live |
+| 7. ADS Expertise | ADS مستقل عن Camera، micro/headshot/stability factors واختبارات ADS | Formula؛ الدليل يصبح measured بعد التجربة |
+| 8. Touch/Input Expertise | عدد الأصابع، finger assignment، touch sampling، candidate finger load، Reach Calibration | device spec + estimated grip + user-provided calibration |
+| 9. Device/Hardware Knowledge | screen dimensions، landscape، PPI، refresh، touch sampling، FPS، processor metadata | spec-sheet/modelled؛ FPS الفعلي أثناء المباراة غير مقاس تلقائياً |
+| 10. Human Factors | grip، comfort، reach، fatigue proxy، occlusion، travel، simultaneous actions | estimated priors أو user calibration |
+| 11. Statistical/Optimization Knowledge | bounded grid، ranking، coordinate descent، beam search، penalties، confidence، deterministic seed | Implemented algorithmically |
+| 12. Competitive/Tournament Knowledge | close/aggressive/tournament scope asymmetry، fast low zoom، precision high zoom | Rule/playstyle prior؛ ليس بيانات بطولات مباشرة |
+
+### ما يتم قياسه
+
+- Training Ground metrics التي يدخلها اللاعب: hit/tracking accuracy، acquisition time، overshoot/undershoot، vertical/horizontal deviation، headshot rate، correction count، sample count.
+- Reach points التي يدخلها اللاعب، إذا اختار معايرتها.
+- لا يتم توليد `measured` من اسم الجهاز أو skill level.
+
+### ما يتم تقديره
+
+- skill profile عند غياب experiments.
+- grip pressure وcomfort zones الافتراضية.
+- خصائص الارتداد غير المستوردة من قياس موثوق.
+- بعض خصائص hardware مثل processor/thermal confidence.
+
+### ما هو مجرد Rule
+
+- إلزام Movement بالإبهام الأيسر.
+- scope/magnification priors.
+- أوزان optimizer الافتراضية.
+- playstyle/tournament asymmetry.
+- توصيف weapon domain profiles الحالية.
+
 ## ما يزال غير قابل للقياس تلقائياً
 
 1. ارتداد PUBG الحقيقي في كل patch؛ لا يوجد مصدر telemetry رسمي مستخدم هنا.
