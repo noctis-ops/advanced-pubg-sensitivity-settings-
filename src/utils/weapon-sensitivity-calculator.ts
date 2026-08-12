@@ -75,7 +75,7 @@ const boundedValue = (
 const normalized = (value: number, min: number, max: number): number =>
   clamp((value - min) / (max - min), 0, 1);
 
-function getWeaponTelemetry(weapon: Weapon): {
+export function getWeaponTelemetry(weapon: Weapon): {
   recoilLoad: number;
   fireRateLoad: number;
   stability: number;

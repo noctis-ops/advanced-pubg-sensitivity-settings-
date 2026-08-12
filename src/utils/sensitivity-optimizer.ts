@@ -29,6 +29,8 @@ export interface SensitivityOptimizationContext {
   experiments?: SensitivityExperiment[];
   goal?: OptimizationGoal;
   seed?: number;
+  /** Fixed reference for coordinate descent; prevents a moving target runaway. */
+  basePair?: WeaponScopeSensitivity;
 }
 
 export interface SensitivityOptimizationResult {
@@ -118,6 +120,7 @@ function targetForPair(pair: WeaponScopeSensitivity, context: SensitivityOptimiz
   const skill = context.skillProfile ?? fallbackSkill;
   const weapon = context.weaponProfile ?? defaultWeaponProfile();
   const scope = context.scope ?? pair.scope;
+  const reference = context.basePair ?? pair;
   const scopeProfile = SCOPE_PROFILES[scope];
   const evidence = evidenceFor({ ...context, scope });
   const tracking = skillValue(skill, 'trackingScore');
@@ -179,10 +182,10 @@ function targetForPair(pair: WeaponScopeSensitivity, context: SensitivityOptimiz
   const stabilityCorrection = 1 - correctionStability;
   const recoilSkillCorrection = (0.5 - recoilControl) * 0.06;
   return {
-    camera: bounded(pair.camera * cameraFactor * (1 - stabilityCorrection * 0.06), 'camera'),
-    ads: bounded(pair.ads * adsFactor * (1 - stabilityCorrection * 0.04), 'ads'),
-    gyroscope: bounded(pair.gyroscope * (gyroFactor + recoilSkillCorrection), 'gyroscope'),
-    adsGyroscope: bounded(pair.adsGyroscope * (adsGyroFactor + recoilSkillCorrection), 'adsGyroscope')
+    camera: bounded(reference.camera * cameraFactor * (1 - stabilityCorrection * 0.06), 'camera'),
+    ads: bounded(reference.ads * adsFactor * (1 - stabilityCorrection * 0.04), 'ads'),
+    gyroscope: bounded(reference.gyroscope * (gyroFactor + recoilSkillCorrection), 'gyroscope'),
+    adsGyroscope: bounded(reference.adsGyroscope * (adsGyroFactor + recoilSkillCorrection), 'adsGyroscope')
   };
 }
 
@@ -258,12 +261,13 @@ export function rankCandidates(candidates: WeaponScopeSensitivity[], context: Se
 }
 
 export function optimizeSensitivity(pair: WeaponScopeSensitivity, context: SensitivityOptimizationContext = {}): SensitivityOptimizationResult {
+  const searchContext: SensitivityOptimizationContext = { ...context, basePair: pair };
   let current = pair;
-  let bestEvaluation = evaluateCandidate(current, context);
+  let bestEvaluation = evaluateCandidate(current, searchContext);
   let iterations = 0;
   let candidatesEvaluated = 1;
   for (let iteration = 0; iteration < 4; iteration += 1) {
-    const ranked = rankCandidates(generateCandidates(current, context), context);
+    const ranked = rankCandidates(generateCandidates(current, searchContext), searchContext);
     candidatesEvaluated += ranked.length;
     const next = ranked[0];
     iterations += 1;

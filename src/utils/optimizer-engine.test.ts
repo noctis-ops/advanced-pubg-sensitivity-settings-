@@ -68,6 +68,7 @@ describe('measured sensitivity and control optimization engine', () => {
     expect(geometry(layout5)).not.toBe(geometry(layout4));
     expect(geometry(layout4)).not.toBe(geometry(layout6));
     expect(new Set(layout5.buttons.map((button) => `${button.x}:${button.y}`)).size).toBeGreaterThan(8);
+    expect(new Set(layout5.buttons.map((button) => button.size)).size).toBeGreaterThan(4);
   });
 
   it('covers the requested asymmetric five-finger and 4/6-finger scenarios', () => {
@@ -131,6 +132,8 @@ describe('measured sensitivity and control optimization engine', () => {
     const m24 = profile.weaponSensitivities.find((item) => item.weapon.id === 'm24')!.values.find((item) => item.scope === 'x8')!;
     expect(akm.gyroscope).toBeGreaterThan(m416.gyroscope);
     expect(m24.ads).toBeLessThan(akm.ads);
+    const generatedValues = profile.weaponSensitivities.flatMap((result) => result.values.flatMap((value) => [value.gyroscope, value.adsGyroscope]));
+    expect(Math.max(...generatedValues)).toBeLessThan(400);
   });
 
   it('changes the sensitivity model for measured experiments without pretending priors are measured', () => {

@@ -185,7 +185,15 @@ export function createPlayerSkillProfile(settings: PlayerSettings, experiments: 
   };
 }
 
-export function buildPlayerModel(device: Device, settings: PlayerSettings, assignment: FingerAssignment = settings.fingerAssignment ?? { left: ['thumb'], right: ['thumb'] }): PlayerModel {
+function defaultFingerAssignment(fingerCount: PlayerSettings['fingerCount']): FingerAssignment {
+  if (fingerCount === 2) return { left: ['thumb'], right: ['thumb'] };
+  if (fingerCount === 3) return { left: ['thumb'], right: ['thumb', 'index'] };
+  if (fingerCount === 4) return { left: ['thumb', 'index'], right: ['thumb', 'index'] };
+  if (fingerCount === 5) return { left: ['thumb', 'index'], right: ['thumb', 'index', 'middle'] };
+  return { left: ['thumb', 'index', 'middle'], right: ['thumb', 'index', 'middle'] };
+}
+
+export function buildPlayerModel(device: Device, settings: PlayerSettings, assignment: FingerAssignment = settings.fingerAssignment ?? defaultFingerAssignment(settings.fingerCount)): PlayerModel {
   const skillProfile = createPlayerSkillProfile(settings);
   const landscapeWidth = Math.max(device.specs.screenWidth, device.specs.screenHeight);
   const landscapeHeight = Math.min(device.specs.screenWidth, device.specs.screenHeight);

@@ -59,6 +59,7 @@ export interface ControlLayoutOptimizerOptions {
   playerModel?: PlayerModel;
   skillProfile?: PlayerSkillProfile;
   weaponProfile?: WeaponProfile;
+  deviceMetrics?: PlayerModel['deviceMetrics'];
   beamWidth?: number;
 }
 
@@ -72,6 +73,7 @@ export interface ControlLayoutOptimizationInput {
   weaponProfile?: WeaponProfile;
   reachZones?: CalibratedReachZone[];
   controlSpecs?: ControlSpec[];
+  deviceMetrics?: PlayerModel['deviceMetrics'];
   seed?: number;
   weights?: Partial<OptimizerWeights>;
 }
@@ -122,9 +124,9 @@ function normalizeCalibrationPoint(point: { x: number; y: number }): { x: number
   };
 }
 
-export function getLandscapeCoordinateSystem(device: Device): LandscapeCoordinateSystem {
-  const width = Math.max(device.specs.screenWidth, device.specs.screenHeight);
-  const height = Math.min(device.specs.screenWidth, device.specs.screenHeight);
+export function getLandscapeCoordinateSystem(device: Device, metrics?: PlayerModel['deviceMetrics']): LandscapeCoordinateSystem {
+  const width = metrics?.landscapeWidth ?? Math.max(device.specs.screenWidth, device.specs.screenHeight);
+  const height = metrics?.landscapeHeight ?? Math.min(device.specs.screenWidth, device.specs.screenHeight);
   return {
     width,
     height,
@@ -351,9 +353,14 @@ export function generateCandidates(specItem: ControlSpec, context: LayoutContext
   fingers.forEach(({ hand, finger }, fingerIndex) => {
     const zone = zoneFor(context.reachZones, hand, finger);
     if (!zone) return;
-    const size = buttonSize(specItem, context);
+    const baseSize = buttonSize(specItem, context);
+    const sizeOptions = Array.from(new Set([
+      baseSize,
+      Math.round(clamp(baseSize * 0.92, specItem.minSize, specItem.maxSize)),
+      Math.round(clamp(baseSize * 1.08, specItem.minSize, specItem.maxSize))
+    ]));
     const offsets = candidateOffsets(fingerIndex, hashSeed(`${context.seed}:${specItem.id}:${hand}:${finger}`) % 9);
-    offsets.forEach((offset, index) => {
+    sizeOptions.forEach((size, sizeIndex) => offsets.forEach((offset, index) => {
       const position = clampInsideSafeArea(
         zone.centerX + offset.x * zone.radiusX * 0.92,
         zone.centerY + offset.y * zone.radiusY * 0.92,
@@ -361,7 +368,7 @@ export function generateCandidates(specItem: ControlSpec, context: LayoutContext
         context.safeArea
       );
       candidates.push({
-        id: `${specItem.id}-${hand}-${finger}-${index}`,
+        id: `${specItem.id}-${hand}-${finger}-${sizeIndex}-${index}`,
         buttonId: specItem.id,
         x: round(position.x),
         y: round(position.y),
@@ -369,9 +376,9 @@ export function generateCandidates(specItem: ControlSpec, context: LayoutContext
         assignedHand: hand,
         assignedFinger: finger,
         sourceZone: normalizeZoneName(hand, finger),
-        rank: fingerIndex * offsets.length + index + 1
+        rank: fingerIndex * sizeOptions.length * offsets.length + sizeIndex * offsets.length + index + 1
       });
-    });
+    }));
   });
   return candidates;
 }
@@ -628,9 +635,11 @@ export function analyzeControlInputs(
 }
 
 function makeContext(device: Device, settings: PlayerSettings, sensitivity: SensitivityCategory, assignment: FingerAssignment, options: ControlLayoutOptimizerOptions): LayoutContext {
-  const coordinateSystem = getLandscapeCoordinateSystem(device);
+  const coordinateSystem = getLandscapeCoordinateSystem(device, options.deviceMetrics);
   const basePlayerModel = options.playerModel ?? buildPlayerModel(device, settings, assignment);
-  const playerModel = options.skillProfile ? { ...basePlayerModel, skillProfile: options.skillProfile, estimated: options.skillProfile.confidence < 0.5 } : basePlayerModel;
+  const playerModel = options.skillProfile
+    ? { ...basePlayerModel, skillProfile: options.skillProfile, deviceMetrics: options.deviceMetrics ?? basePlayerModel.deviceMetrics, estimated: options.skillProfile.confidence < 0.5 }
+    : options.deviceMetrics ? { ...basePlayerModel, deviceMetrics: options.deviceMetrics } : basePlayerModel;
   const reachZones = options.reachZones ?? buildReachZones(device, assignment, options.reachCalibration);
   const weights: OptimizerWeights = { ...DEFAULT_OPTIMIZER_WEIGHTS, ...(options.weights ?? {}) };
   return {
@@ -817,7 +826,7 @@ export function optimizeControlLayout(
   const sensitivity = objectInput ? inputOrDevice.sensitivityProfile : sensitivityArg!;
   const assignment = objectInput ? inputOrDevice.assignment : assignmentArg!;
   const options: ControlLayoutOptimizerOptions = objectInput
-    ? { ...optionsArg, seed: inputOrDevice.seed ?? optionsArg.seed, weights: inputOrDevice.weights ?? optionsArg.weights, reachZones: inputOrDevice.reachZones ?? optionsArg.reachZones, playerModel: inputOrDevice.playerProfile ?? optionsArg.playerModel, skillProfile: inputOrDevice.skillProfile ?? optionsArg.skillProfile, weaponProfile: inputOrDevice.weaponProfile ?? optionsArg.weaponProfile, controlSpecs: inputOrDevice.controlSpecs ?? optionsArg.controlSpecs }
+    ? { ...optionsArg, seed: inputOrDevice.seed ?? optionsArg.seed, weights: inputOrDevice.weights ?? optionsArg.weights, reachZones: inputOrDevice.reachZones ?? optionsArg.reachZones, playerModel: inputOrDevice.playerProfile ?? optionsArg.playerModel, skillProfile: inputOrDevice.skillProfile ?? optionsArg.skillProfile, weaponProfile: inputOrDevice.weaponProfile ?? optionsArg.weaponProfile, controlSpecs: inputOrDevice.controlSpecs ?? optionsArg.controlSpecs, deviceMetrics: inputOrDevice.deviceMetrics ?? optionsArg.deviceMetrics }
     : optionsArg;
   const context = makeContext(device, settings, sensitivity, assignment, options);
   const assignmentErrors = validateFingerAssignment(assignment, settings.fingerCount);
