@@ -14,7 +14,7 @@ export function Card({ children, className, variant = 'default', onClick }: Card
     interactive: 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06] hover:border-white/20 cursor-pointer',
     selected: 'bg-amber-500/10 border-amber-500/30 ring-1 ring-amber-500/20'
   };
-  
+
   return (
     <div
       className={cn(

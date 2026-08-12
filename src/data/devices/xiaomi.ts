@@ -551,5 +551,128 @@ export const xiaomiDevices: Device[] = [
       gyroscopeQuality: 7,
       processorTier: 'high'
     }
+  },
+
+  // ========== Xiaomi 15 / 14T / Pad Series ==========
+  {
+    id: 'xiaomi-15-ultra',
+    brand: 'xiaomi',
+    name: 'Xiaomi 15 Ultra',
+    nameAr: 'شاومي 15 ألترا',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2025,
+    specs: { screenSize: 6.73, screenWidth: 1440, screenHeight: 3200, ppi: 522, refreshRate: 120, touchSamplingRate: 480, maxFPS: 120, gyroscopeQuality: 10, processorTier: 'flagship' }
+  },
+  {
+    id: 'xiaomi-15-pro',
+    brand: 'xiaomi',
+    name: 'Xiaomi 15 Pro',
+    nameAr: 'شاومي 15 برو',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2024,
+    specs: { screenSize: 6.73, screenWidth: 1440, screenHeight: 3200, ppi: 522, refreshRate: 120, touchSamplingRate: 480, maxFPS: 120, gyroscopeQuality: 9, processorTier: 'flagship' }
+  },
+  {
+    id: 'xiaomi-15',
+    brand: 'xiaomi',
+    name: 'Xiaomi 15',
+    nameAr: 'شاومي 15',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2024,
+    specs: { screenSize: 6.36, screenWidth: 1200, screenHeight: 2670, ppi: 460, refreshRate: 120, touchSamplingRate: 480, maxFPS: 120, gyroscopeQuality: 9, processorTier: 'flagship' }
+  },
+  {
+    id: 'xiaomi-14t-pro',
+    brand: 'xiaomi',
+    name: 'Xiaomi 14T Pro',
+    nameAr: 'شاومي 14T برو',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2024,
+    specs: { screenSize: 6.67, screenWidth: 1220, screenHeight: 2712, ppi: 446, refreshRate: 144, touchSamplingRate: 480, maxFPS: 120, gyroscopeQuality: 8, processorTier: 'flagship' }
+  },
+  {
+    id: 'xiaomi-14t',
+    brand: 'xiaomi',
+    name: 'Xiaomi 14T',
+    nameAr: 'شاومي 14T',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2024,
+    specs: { screenSize: 6.67, screenWidth: 1220, screenHeight: 2712, ppi: 446, refreshRate: 144, touchSamplingRate: 480, maxFPS: 120, gyroscopeQuality: 8, processorTier: 'high' }
+  },
+  {
+    id: 'xiaomi-13-lite',
+    brand: 'xiaomi',
+    name: 'Xiaomi 13 Lite',
+    nameAr: 'شاومي 13 لايت',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2023,
+    specs: { screenSize: 6.55, screenWidth: 1080, screenHeight: 2400, ppi: 402, refreshRate: 120, touchSamplingRate: 240, maxFPS: 60, gyroscopeQuality: 7, processorTier: 'high' }
+  },
+  {
+    id: 'xiaomi-12t-pro',
+    brand: 'xiaomi',
+    name: 'Xiaomi 12T Pro',
+    nameAr: 'شاومي 12T برو',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2022,
+    specs: { screenSize: 6.67, screenWidth: 1220, screenHeight: 2712, ppi: 446, refreshRate: 120, touchSamplingRate: 480, maxFPS: 120, gyroscopeQuality: 8, processorTier: 'flagship' }
+  },
+  {
+    id: 'xiaomi-pad-7-pro',
+    brand: 'xiaomi',
+    name: 'Xiaomi Pad 7 Pro',
+    nameAr: 'شاومي باد 7 برو',
+    type: 'tablet',
+    os: 'android',
+    releaseYear: 2025,
+    specs: { screenSize: 11.2, screenWidth: 3200, screenHeight: 2136, ppi: 345, refreshRate: 144, touchSamplingRate: 240, maxFPS: 120, gyroscopeQuality: 8, processorTier: 'flagship' }
+  },
+  // ========== POCO F / X Series Expansion ==========
+  {
+    id: 'poco-f3',
+    brand: 'poco',
+    name: 'POCO F3',
+    nameAr: 'بوكو F3',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2021,
+    specs: { screenSize: 6.67, screenWidth: 1080, screenHeight: 2400, ppi: 395, refreshRate: 120, touchSamplingRate: 360, maxFPS: 90, gyroscopeQuality: 8, processorTier: 'high' }
+  },
+  {
+    id: 'poco-x3-pro',
+    brand: 'poco',
+    name: 'POCO X3 Pro',
+    nameAr: 'بوكو X3 برو',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2021,
+    specs: { screenSize: 6.67, screenWidth: 1080, screenHeight: 2400, ppi: 395, refreshRate: 120, touchSamplingRate: 240, maxFPS: 60, gyroscopeQuality: 8, processorTier: 'high' }
+  },
+  {
+    id: 'poco-x3-nfc',
+    brand: 'poco',
+    name: 'POCO X3 NFC',
+    nameAr: 'بوكو X3 NFC',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2020,
+    specs: { screenSize: 6.67, screenWidth: 1080, screenHeight: 2400, ppi: 395, refreshRate: 120, touchSamplingRate: 240, maxFPS: 60, gyroscopeQuality: 7, processorTier: 'mid' }
+  },
+  {
+    id: 'poco-m6-pro',
+    brand: 'poco',
+    name: 'POCO M6 Pro',
+    nameAr: 'بوكو M6 برو',
+    type: 'phone',
+    os: 'android',
+    releaseYear: 2024,
+    specs: { screenSize: 6.67, screenWidth: 1080, screenHeight: 2400, ppi: 395, refreshRate: 120, touchSamplingRate: 240, maxFPS: 60, gyroscopeQuality: 6, processorTier: 'mid' }
   }
 ];

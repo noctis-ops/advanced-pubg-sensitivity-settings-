@@ -8,13 +8,14 @@ import { Step2FPS } from './components/steps/Step2FPS';
 import { Step3Fingers } from './components/steps/Step3Fingers';
 import { Step4Gyroscope } from './components/steps/Step4Gyroscope';
 import { Step5Playstyle } from './components/steps/Step5Playstyle';
+import { Step6Advanced } from './components/steps/Step6Advanced';
 import { ResultsPage } from './components/results/ResultsPage';
 import { cn } from './utils/cn';
 
 function AppContent() {
   const { state, isRTL } = useApp();
   const { currentStep } = state;
-  
+
   const renderStep = () => {
     switch (currentStep) {
       case 1: return <Step1Device />;
@@ -22,13 +23,14 @@ function AppContent() {
       case 3: return <Step3Fingers />;
       case 4: return <Step4Gyroscope />;
       case 5: return <Step5Playstyle />;
+      case 6: return <Step6Advanced />;
       case 'results': return <ResultsPage />;
       default: return <Step1Device />;
     }
   };
-  
+
   return (
-    <div 
+    <div
       className={cn(
         "min-h-screen bg-[#0a0a0f] text-white",
         isRTL ? "font-arabic" : "font-sans"
@@ -42,23 +44,23 @@ function AppContent() {
           backgroundSize: '40px 40px'
         }} />
       </div>
-      
+
       <div className="relative z-10">
         <Header />
-        
+
         <main className="max-w-2xl mx-auto px-4 pb-8">
           {/* Step indicator */}
           <StepIndicator />
-          
+
           {/* Current step content */}
           <div className="min-h-[400px]">
             {renderStep()}
           </div>
-          
+
           {/* Navigation */}
           <Navigation />
         </main>
-        
+
         <Footer />
       </div>
     </div>

@@ -2,23 +2,40 @@ import { useState, useEffect } from 'react';
 import { cn } from '../../utils/cn';
 import { useApp } from '../../context/AppContext';
 import { generateFullSensitivity } from '../../utils/sensitivity-calculator';
+import { calculateSensitivityConfidence } from '../../utils/confidence';
+import { trackEvent } from '../../utils/analytics';
 import { SCOPE_KEYS, SCOPE_LABELS } from '../../data/constants';
 import { SensitivitySet } from '../../types';
-import { 
-  Camera, 
-  Crosshair, 
-  RotateCw, 
-  Target, 
-  Copy, 
-  Check, 
+import {
+  Camera,
+  Crosshair,
+  RotateCw,
+  Target,
+  Copy,
+  Check,
   RefreshCw,
-  ChevronDown,
-  Info,
   Move,
   Eye
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { WeaponSensitivity } from './WeaponSensitivity';
+import { ExplanationPanel } from './ExplanationPanel';
+import { ConfidencePanel } from './ConfidencePanel';
+import { CalibrationPanel } from './CalibrationPanel';
+import { ManualAdjustmentPanel } from './ManualAdjustmentPanel';
+import { SavedProfilesPanel } from './SavedProfilesPanel';
+import { ShareProfileButton } from './ShareProfileButton';
+import { ProfileIOPanel } from './ProfileIOPanel';
+import { AdvancedSettingsPanel } from './AdvancedSettingsPanel';
+import { ComparisonPanel } from './ComparisonPanel';
+import { FeedbackPanel } from './FeedbackPanel';
+import { MeasurementLabPanel } from './MeasurementLabPanel';
+import { OptimizationPanel } from './OptimizationPanel';
+import { ExperimentPanel } from './ExperimentPanel';
+import { SyntheticValidationPanel } from './SyntheticValidationPanel';
+import { DeviceProcessorCard } from '../DeviceProcessorCard';
+import { ControlsLayoutPanel } from './ControlsLayoutPanel';
+import { PlayerModelPanel } from './PlayerModelPanel';
 
 type TabId = 'camera' | 'ads' | 'gyroscope' | 'adsGyroscope';
 
@@ -33,37 +50,55 @@ export function ResultsPage() {
   const { state, t, isRTL, setSensitivity, reset, setStep } = useApp();
   const [activeTab, setActiveTab] = useState<TabId>('camera');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const [isGenerating, setIsGenerating] = useState(true);
-  
+  const [generationError, setGenerationError] = useState(false);
+  const [calibrationCount, setCalibrationCount] = useState(0);
+
   // Generate sensitivity on mount
   useEffect(() => {
     if (state.selectedDevice && !state.generatedSensitivity) {
       setIsGenerating(true);
-      // Simulate loading for UX
+      setGenerationError(false);
+      // Simulate loading for UX while keeping generation deterministic.
       const timer = setTimeout(() => {
-        const result = generateFullSensitivity(state.selectedDevice!, state.playerSettings);
-        setSensitivity(result);
-        setIsGenerating(false);
+        try {
+          const result = generateFullSensitivity(state.selectedDevice!, state.playerSettings);
+          setSensitivity(result);
+          trackEvent('generation_completed');
+          setIsGenerating(false);
+        } catch {
+          setGenerationError(true);
+          setIsGenerating(false);
+        }
       }, 1500);
       return () => clearTimeout(timer);
-    } else {
-      setIsGenerating(false);
     }
-  }, [state.selectedDevice, state.playerSettings]);
-  
+
+    setIsGenerating(false);
+  }, [state.selectedDevice, state.playerSettings, state.generatedSensitivity]);
+
   const sensitivity = state.generatedSensitivity?.sensitivity;
   const explanations = state.generatedSensitivity?.explanations || [];
+  const weaponSensitivities = state.generatedSensitivity?.weaponSensitivities || [];
   const additional = state.generatedSensitivity?.additional;
-  
+
   // Copy function
   const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    });
+    setCopyError(false);
+    if (!navigator.clipboard) {
+      setCopyError(true);
+      return;
+    }
+
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+      })
+      .catch(() => setCopyError(true));
   };
-  
+
   // Format sensitivity for copying
   const formatSensitivityText = (category: TabId, data: SensitivitySet): string => {
     const labels: Record<TabId, string> = {
@@ -72,7 +107,7 @@ export function ResultsPage() {
       gyroscope: 'Gyroscope Sensitivity',
       adsGyroscope: 'ADS Gyroscope Sensitivity'
     };
-    
+
     let text = `【 ${labels[category]} 】\n`;
     SCOPE_KEYS.forEach(key => {
       text += `${SCOPE_LABELS[key].en}: ${data[key]}\n`;
@@ -81,7 +116,7 @@ export function ResultsPage() {
     text += `Aim FPP: ${data.aimFPP}\n`;
     return text;
   };
-  
+
   const formatAllSensitivity = (): string => {
     if (!sensitivity) return '';
     let text = `🎮 PUBG Mobile Sensitivity\n`;
@@ -95,7 +130,7 @@ export function ResultsPage() {
     text += formatSensitivityText('adsGyroscope', sensitivity.adsGyroscope);
     return text;
   };
-  
+
   // Loading state
   if (isGenerating) {
     return (
@@ -120,28 +155,33 @@ export function ResultsPage() {
       </div>
     );
   }
-  
-  if (!sensitivity || !state.selectedDevice) {
+
+  if (generationError || !sensitivity || !state.selectedDevice) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-400">Something went wrong. Please try again.</p>
+        <p className="text-gray-400">{t.generationError}</p>
         <Button onClick={() => setStep(1)} className="mt-4">
           {t.startOver}
         </Button>
       </div>
     );
   }
-  
+
+  const confidence = calculateSensitivityConfidence(
+    state.selectedDevice,
+    weaponSensitivities,
+    calibrationCount
+  );
   const currentData = sensitivity[activeTab];
   const currentTab = tabs.find(tab => tab.id === activeTab)!;
-  
+
   const tabLabels: Record<TabId, string> = {
     camera: t.camera,
     ads: t.ads,
     gyroscope: t.gyroscope,
     adsGyroscope: t.adsGyroscope
   };
-  
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -149,7 +189,7 @@ export function ResultsPage() {
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{t.resultsTitle}</h2>
         <p className="text-gray-400">{t.resultsSubtitle}</p>
       </div>
-      
+
       {/* Device summary */}
       <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
         <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
@@ -160,14 +200,20 @@ export function ResultsPage() {
           <span className="text-green-400">{state.playerSettings.fingerCount} {t.fingers}</span>
           <span className="text-gray-500">|</span>
           <span className="text-blue-400">
-            {state.playerSettings.gyroscopeMode === 'always-on' ? 'Full Gyro' : 
-             state.playerSettings.gyroscopeMode === 'scope-only' ? 'Scope Gyro' : 'No Gyro'}
+            {state.playerSettings.gyroscopeMode === 'always-on' ? t.fullGyro :
+             state.playerSettings.gyroscopeMode === 'scope-only' ? t.scopeGyro : t.noGyro}
           </span>
         </div>
       </div>
-      
+      <DeviceProcessorCard device={state.selectedDevice} />
+
+      <ConfidencePanel confidence={confidence} />
+      <PlayerModelPanel />
+      <SyntheticValidationPanel />
+      <ComparisonPanel current={sensitivity} />
+
       {/* Copy all button */}
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-2">
         <Button
           onClick={() => copyToClipboard(formatAllSensitivity(), 'all')}
           variant={copiedId === 'all' ? 'primary' : 'outline'}
@@ -179,14 +225,17 @@ export function ResultsPage() {
             <><Copy className="w-5 h-5" /> {t.copyAll}</>
           )}
         </Button>
+        {copyError && <p className="text-xs text-red-400">{t.copyError}</p>}
+        <ShareProfileButton />
       </div>
-      
+      <ProfileIOPanel />
+
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl bg-white/5 overflow-x-auto">
         {tabs.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
-          
+
           return (
             <button
               key={tab.id}
@@ -204,7 +253,7 @@ export function ResultsPage() {
           );
         })}
       </div>
-      
+
       {/* Sensitivity table */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
         {/* Header */}
@@ -224,14 +273,14 @@ export function ResultsPage() {
             )}
           </button>
         </div>
-        
+
         {/* Values */}
         <div className="divide-y divide-white/5">
           {SCOPE_KEYS.map(key => (
             <div key={key} className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.02]">
               <div>
-                <span className="text-gray-300">{SCOPE_LABELS[key].ar}</span>
-                <span className="text-gray-600 text-xs mr-2">({SCOPE_LABELS[key].en})</span>
+                <span className="text-gray-300">{isRTL ? SCOPE_LABELS[key].ar : SCOPE_LABELS[key].en}</span>
+                <span className="text-gray-600 text-xs mr-2">({isRTL ? SCOPE_LABELS[key].en : SCOPE_LABELS[key].ar})</span>
               </div>
               <span className={cn('text-xl font-black tabular-nums', currentTab.color)}>
                 {currentData[key]}
@@ -240,24 +289,26 @@ export function ResultsPage() {
           ))}
           {/* Aim Features */}
           <div className="px-4 py-3 bg-amber-500/5">
-            <p className="text-xs text-amber-400 font-semibold mb-2">Aim Features</p>
+            <p className="text-xs text-amber-400 font-semibold mb-2">{t.aimFeatures}</p>
             <div className="flex gap-4">
               <div className="flex-1 text-center p-2 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-gray-500">Aim TPP</p>
+                <p className="text-xs text-gray-500">{t.aimTPPLabel}</p>
                 <p className={cn('text-lg font-black', currentTab.color)}>{currentData.aimTPP}</p>
               </div>
               <div className="flex-1 text-center p-2 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-gray-500">Aim FPP</p>
+                <p className="text-xs text-gray-500">{t.aimFPPLabel}</p>
                 <p className={cn('text-lg font-black', currentTab.color)}>{currentData.aimFPP}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
+      <AdvancedSettingsPanel />
+
       {/* Additional settings */}
       {additional && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
             <div className="flex items-center gap-2 mb-2">
               <Move className="w-4 h-4 text-purple-400" />
@@ -272,59 +323,55 @@ export function ResultsPage() {
             </div>
             <p className="text-2xl font-black text-cyan-400">{additional.freeLook}</p>
           </div>
-        </div>
-      )}
-      
-      {/* Explanation toggle */}
-      <button
-        onClick={() => setShowExplanation(!showExplanation)}
-        className="w-full flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.05] transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Info className="w-5 h-5 text-blue-400" />
-          <span className="font-medium text-white">{t.whyTheseValues}</span>
-        </div>
-        <ChevronDown className={cn('w-5 h-5 text-gray-400 transition-transform', showExplanation && 'rotate-180')} />
-      </button>
-      
-      {/* Explanation content */}
-      {showExplanation && explanations.length > 0 && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
-          <div className="divide-y divide-white/5">
-            {explanations.map((exp, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-white font-medium">{exp.factorAr}</p>
-                  <p className="text-xs text-gray-500">{exp.impactAr}</p>
-                </div>
-                <span className={cn(
-                  'text-sm font-bold px-2 py-0.5 rounded',
-                  exp.adjustment > 0 ? 'text-green-400 bg-green-500/10' : 
-                  exp.adjustment < 0 ? 'text-red-400 bg-red-500/10' : 'text-gray-400'
-                )}>
-                  {exp.adjustment > 0 ? '+' : ''}{exp.adjustment}%
-                </span>
-              </div>
-            ))}
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <Crosshair className="w-4 h-4 text-red-400" />
+              <span className="text-sm text-gray-400">{t.fireButtonSize}</span>
+            </div>
+            <p className="text-2xl font-black text-red-400">{additional.fireButtonSize}%</p>
+          </div>
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <Target className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm text-gray-400">{t.peekButtonSize}</span>
+            </div>
+            <p className="text-2xl font-black text-emerald-400">{additional.peekButtonSize}%</p>
+          </div>
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <RotateCw className="w-4 h-4 text-amber-400" />
+              <span className="text-sm text-gray-400">{t.sprintSensitivity}</span>
+            </div>
+            <p className="text-2xl font-black text-amber-400">{additional.sprintSensitivity}</p>
           </div>
         </div>
       )}
-      
+
+      <ExplanationPanel explanations={explanations} />
+      <ManualAdjustmentPanel />
+
       {/* Tip */}
       <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
         <p className="text-sm text-amber-400">{t.tipAimFeatures}</p>
       </div>
-      
+
       {/* Weapon Sensitivity */}
-      {state.playerSettings.gyroscopeMode !== 'off' && (
-        <WeaponSensitivity 
-          baseSensitivity={{
-            ads: sensitivity.ads,
-            adsGyroscope: sensitivity.adsGyroscope
-          }}
-        />
-      )}
-      
+      <WeaponSensitivity />
+
+      <CalibrationPanel
+        results={weaponSensitivities}
+        onApplied={() => {
+          trackEvent('calibration_applied');
+          setCalibrationCount((count) => count + 1);
+        }}
+      />
+      <SavedProfilesPanel />
+      <OptimizationPanel />
+      <MeasurementLabPanel />
+      <ExperimentPanel />
+      <FeedbackPanel />
+      <ControlsLayoutPanel />
+
       {/* Actions */}
       <div className="flex gap-3">
         <Button onClick={reset} variant="secondary" className="flex-1">

@@ -3,8 +3,8 @@ import { useApp } from '../../context/AppContext';
 import { GyroscopeMode } from '../../types';
 import { Smartphone, Target, RotateCw, Star } from 'lucide-react';
 
-const gyroOptions: { 
-  value: GyroscopeMode; 
+const gyroOptions: {
+  value: GyroscopeMode;
   icon: typeof Smartphone;
   color: string;
   bgColor: string;
@@ -17,7 +17,7 @@ const gyroOptions: {
 export function Step4Gyroscope() {
   const { state, t, setGyroscope } = useApp();
   const currentMode = state.playerSettings.gyroscopeMode;
-  
+
   const getLabels = (mode: GyroscopeMode) => {
     const labels: Record<GyroscopeMode, { title: string; desc: string }> = {
       'off': { title: t.gyroOff, desc: t.gyroOffDesc },
@@ -26,7 +26,7 @@ export function Step4Gyroscope() {
     };
     return labels[mode];
   };
-  
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -34,7 +34,7 @@ export function Step4Gyroscope() {
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{t.step4Title}</h2>
         <p className="text-gray-400">{t.step4Subtitle}</p>
       </div>
-      
+
       {/* Gyroscope quality info */}
       {state.selectedDevice && (
         <div className="flex items-center justify-center gap-2 text-sm">
@@ -55,14 +55,14 @@ export function Step4Gyroscope() {
           <span className="text-green-400 font-bold">{state.selectedDevice.specs.gyroscopeQuality}/10</span>
         </div>
       )}
-      
+
       {/* Options */}
       <div className="space-y-3">
         {gyroOptions.map(option => {
           const isSelected = currentMode === option.value;
           const labels = getLabels(option.value);
           const Icon = option.icon;
-          
+
           return (
             <button
               key={option.value}
@@ -81,7 +81,7 @@ export function Step4Gyroscope() {
               )}>
                 <Icon className={cn('w-6 h-6', isSelected ? 'text-amber-400' : option.color)} />
               </div>
-              
+
               {/* Text */}
               <div className="flex-1 text-right">
                 <div className="flex items-center gap-2 justify-end">
@@ -97,7 +97,7 @@ export function Step4Gyroscope() {
                 </div>
                 <p className="text-sm text-gray-400 mt-0.5">{labels.desc}</p>
               </div>
-              
+
               {/* Radio indicator */}
               <div className={cn(
                 'w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center',
@@ -109,12 +109,12 @@ export function Step4Gyroscope() {
           );
         })}
       </div>
-      
+
       {/* Info box for "off" */}
       {currentMode === 'off' && (
         <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
           <p className="text-sm text-yellow-400">
-            ⚠️ {state.playerSettings.fingerCount === 2 
+            ⚠️ {state.playerSettings.fingerCount === 2
               ? (state.language === 'ar' ? 'بدون جايرو مع إبهامين قد يكون صعباً - سنرفع حساسية الكاميرا للتعويض' : 'No gyro with thumbs can be challenging - we\'ll increase camera sensitivity to compensate')
               : (state.language === 'ar' ? 'سنرفع حساسية الكاميرا للتعويض عن عدم استخدام الجايرو' : 'We\'ll increase camera sensitivity to compensate for no gyro')}
           </p>

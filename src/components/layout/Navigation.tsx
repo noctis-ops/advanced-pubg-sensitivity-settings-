@@ -6,13 +6,13 @@ import { cn } from '../../utils/cn';
 export function Navigation() {
   const { state, t, isRTL, nextStep, prevStep, canGoNext, setStep } = useApp();
   const { currentStep } = state;
-  
+
   // Don't show navigation on results page
   if (currentStep === 'results') return null;
-  
+
   const isFirstStep = currentStep === 1;
-  const isLastStep = currentStep === 5;
-  
+  const isLastStep = currentStep === 6;
+
   const handleNext = () => {
     if (isLastStep) {
       setStep('results');
@@ -20,10 +20,10 @@ export function Navigation() {
       nextStep();
     }
   };
-  
+
   const NextIcon = isRTL ? ChevronLeft : ChevronRight;
   const PrevIcon = isRTL ? ChevronRight : ChevronLeft;
-  
+
   return (
     <div className="flex gap-3 mt-8">
       {/* Back button */}
@@ -38,7 +38,7 @@ export function Navigation() {
           {t.back}
         </Button>
       )}
-      
+
       {/* Next/Generate button */}
       <Button
         onClick={handleNext}

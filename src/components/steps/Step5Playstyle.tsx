@@ -3,14 +3,16 @@ import { useApp } from '../../context/AppContext';
 import { PlayStyle } from '../../types';
 import { Zap, Scale, Target } from 'lucide-react';
 
-const playstyleOptions: { 
-  value: PlayStyle; 
+const playstyleOptions: {
+  value: PlayStyle;
   icon: typeof Zap;
   color: string;
   bgColor: string;
   borderColor: string;
 }[] = [
   { value: 'aggressive', icon: Zap, color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/20' },
+  { value: 'close-aggressive', icon: Zap, color: 'text-orange-400', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/20' },
+  { value: 'tournament-elite', icon: Zap, color: 'text-fuchsia-400', bgColor: 'bg-fuchsia-500/10', borderColor: 'border-fuchsia-500/20' },
   { value: 'balanced', icon: Scale, color: 'text-amber-400', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/20' },
   { value: 'passive', icon: Target, color: 'text-blue-400', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/20' }
 ];
@@ -18,16 +20,18 @@ const playstyleOptions: {
 export function Step5Playstyle() {
   const { state, t, setPlaystyle } = useApp();
   const currentStyle = state.playerSettings.playStyle;
-  
+
   const getLabels = (style: PlayStyle) => {
     const labels: Record<PlayStyle, { title: string; desc: string; emoji: string }> = {
       'aggressive': { title: t.aggressive, desc: t.aggressiveDesc, emoji: '🔥' },
+      'close-aggressive': { title: t.closeAggressive, desc: t.closeAggressiveDesc, emoji: '⚡' },
+      'tournament-elite': { title: t.tournamentElite, desc: t.tournamentEliteDesc, emoji: '🏆' },
       'balanced': { title: t.balanced, desc: t.balancedDesc, emoji: '⚖️' },
       'passive': { title: t.passive, desc: t.passiveDesc, emoji: '🎯' }
     };
     return labels[style];
   };
-  
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -35,13 +39,13 @@ export function Step5Playstyle() {
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{t.step5Title}</h2>
         <p className="text-gray-400">{t.step5Subtitle}</p>
       </div>
-      
+
       {/* Options */}
       <div className="space-y-3">
         {playstyleOptions.map(option => {
           const isSelected = currentStyle === option.value;
           const labels = getLabels(option.value);
-          
+
           return (
             <button
               key={option.value}
@@ -61,7 +65,7 @@ export function Step5Playstyle() {
                 )}>
                   <span className="text-2xl">{labels.emoji}</span>
                 </div>
-                
+
                 {/* Text */}
                 <div className="flex-1 text-right">
                   <p className={cn(
@@ -74,7 +78,7 @@ export function Step5Playstyle() {
                     {labels.desc}
                   </p>
                 </div>
-                
+
                 {/* Radio indicator */}
                 <div className={cn(
                   'w-6 h-6 rounded-full border-2 shrink-0 flex items-center justify-center mt-1',
@@ -87,7 +91,7 @@ export function Step5Playstyle() {
           );
         })}
       </div>
-      
+
       {/* Summary */}
       <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
         <p className="text-sm text-gray-400 text-center">
