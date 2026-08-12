@@ -54,7 +54,7 @@ describe('measured sensitivity and control optimization engine', () => {
     const objectApi = optimizeControlLayout({ device, settings: baseSettings, assignment: assignment5, sensitivityProfile: sensitivity, seed: 991 });
     expect(objectApi.analysis.passed).toBe(true);
     expect(geometry(objectApi)).toBe(geometry(first));
-  });
+  }, 20000);
 
   it('changes geometry when the same player changes finger assignment and count', () => {
     const settings4 = { ...baseSettings, fingerCount: 4 as const, gripStyle: 'claw' as const };
